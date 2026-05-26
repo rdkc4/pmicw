@@ -3,15 +3,23 @@ import platform
 import uuid
 import psutil
 import cpuinfo
+import git
+import amdsmi
 
 class Version:
-    def __init__(self, repo: str, branch: str, commit: str):
-        self.repo   = repo
-        self.branch = branch
-        self.commit = commit
+    def __init__(self):
+        try:
+            repo = git.Repo(search_parent_directories=True)
+            self.repository = repo.remotes.origin.url
+            self.branch     = repo.active_branch.name
+            self.commit     = repo.head.commit.hexsha
+        except:
+            self.repository = "N/A"
+            self.branch     = "N/A"
+            self.commit     = "N/A"
     
     def __repr__(self):
-        return f"Version(repo='{self.repo}', branch='{self.branch}', commit='{self.commit}')"
+        return f"Version(repository='{self.repository}', branch='{self.branch}', commit='{self.commit}')"
 
 class OSInfo:
     def __init__(self):
@@ -30,7 +38,7 @@ class SoftwareInfo:
 
 class CPUInfo:
     def __init__(self):
-        cpu_info = cpuinfo.get_cpu_info()
+        cpu_info            = cpuinfo.get_cpu_info()
         self.model          = cpu_info['brand_raw']
         self.architecture   = cpu_info['arch']
         self.physical_cores = psutil.cpu_count(logical=False)
@@ -42,11 +50,37 @@ class CPUInfo:
 
 class GPUInfo:
     def __init__(self):
-        self.model  = "N/A"
-        self.memory = "N/A"
+        try:
+            amdsmi.amdsmi_init()
+            devices = amdsmi.amdsmi_get_processor_handles()
+
+            if len(devices) > 0:
+                info            = amdsmi.amdsmi_get_gpu_asic_info(devices[0])
+                mem_info        = amdsmi.amdsmi_get_gpu_vram_usage(devices[0])
+                self.model      = info.get('market_name', 'N/A')
+                self.target     = info.get('target_graphics_version', 'N/A')
+                self.vram_total = mem_info.get('vram_total', 'N/A')
+                self.vram_used  = mem_info.get('vram_used', 'N/A')
+            else:
+                self.model      = "N/A"
+                self.target     = "N/A"
+                self.vram_total = "N/A"
+                self.vram_used  = "N/A"
+
+        except:
+            self.model      = "N/A"
+            self.target     = "N/A"
+            self.vram_total = "N/A"
+            self.vram_used  = "N/A"
+
+        finally:
+            try:
+                amdsmi.amdsmi_shut_down()
+            except:
+                pass
 
     def __repr__(self):
-        return f"GPUInfo(model='{self.model}', memory='{self.memory}')"
+        return f"GPUInfo(model='{self.model}', target='{self.target}', vram_total='{self.vram_total}', vram_used='{self.vram_used}')"
 
 class MemoryInfo:
     def __init__(self):
@@ -73,12 +107,12 @@ class HardwareInfo:
         return f"HardwareInfo(cpu={self.cpu}, gpu={self.gpu}, memory={self.memory})"
 
 class Metadata:
-    def __init__(self, run_id: uuid.UUID, version: Version, software: SoftwareInfo, hardware: HardwareInfo):
+    def __init__(self, run_id: uuid.UUID):
         self.run_id    = run_id
         self.timestamp = datetime.datetime.now().isoformat()
-        self.version   = version
-        self.software  = software
-        self.hardware  = hardware
+        self.version   = Version()
+        self.software  = SoftwareInfo()
+        self.hardware  = HardwareInfo()
 
     def __repr__(self):
         return f"Metadata(run_id='{self.run_id}', timestamp='{self.timestamp}', version={self.version}, software={self.software}, hardware={self.hardware})"
