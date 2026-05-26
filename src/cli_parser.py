@@ -6,7 +6,11 @@ def create_cli_parser() -> argparse.ArgumentParser:
         usage='%(prog)s workload [workload-options] [options]', 
         add_help=False
     )
-    parser.add_argument('workload', help='define the workload')
+    
+    parser.add_argument(
+        'workload', 
+        help='the command or script to execute as the workload'
+    )
 
     add_workload_options(parser)
     add_options(parser)
@@ -22,6 +26,14 @@ def add_workload_options(parser: argparse.ArgumentParser) -> None:
         help='arguments for the workload separated by space'
     )
 
+    workload_options.add_argument(
+        '-it', '--iteration',
+        nargs=1,
+        type=int,
+        default=1,
+        help='define the number of iterations to run the workload (default: 1)'
+    )
+
 def add_options(parser: argparse.ArgumentParser) -> None:
     options = parser.add_argument_group('options')
 
@@ -30,48 +42,42 @@ def add_options(parser: argparse.ArgumentParser) -> None:
         nargs='*',
         default='wall-time',
         choices=['wall-time', 'cpu', 'gpu', 'memory'],
-        help='list of metrics separated by space'
-    )
-
-    options.add_argument(
-        '-it', '--iteration',
-        nargs=1,
-        type=int,
-        default=1,
-        help='define the number of iterations to run the workload (default: 1)'
+        help='metrics to collect separated by space (default: wall-time)'
     )
 
     options.add_argument(
         '-cmp', '--compare',
         nargs=1,
         type=int,
-        help='compare current version with n previous versions'
+        help='compare with a specific number of previous runs'
     )
 
     options.add_argument(
         '-cmp2', '--compare-two',
         nargs=2,
-        help='compare two specific versions'
+        help='compare two specific runs by their run IDs'
     )
 
     options.add_argument(
         '-cmpw', '--compare-with',
         nargs=1,
-        help='compare current version with a specific version'
+        help='compare current run with a specific run by its run ID'
     )
 
     options.add_argument(
         '-rfmt', '--report-format',
         nargs='*',
+        default='csv',
         choices=['json', 'csv', 'html'],
-        help='report formats separated by space'
+        help='report formats separated by space (default: csv)'
     )
 
     options.add_argument(
         '-vfmt', '--visual-format',
         nargs='*',
+        default='graph',
         choices=['table', 'chart', 'graph'],
-        help='visualization formats separated by space'
+        help='visualization formats separated by space (default: graph)'
     )
 
     options.add_argument(
