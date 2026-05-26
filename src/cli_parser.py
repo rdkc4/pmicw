@@ -1,12 +1,16 @@
 import argparse
 
+def parse_args() -> argparse.Namespace:
+    parser = create_cli_parser()
+    return parser.parse_args()
+
 def create_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         'cli-parser', 
         usage='%(prog)s workload [workload-options] [options]', 
         add_help=False
     )
-    
+
     parser.add_argument(
         'workload', 
         help='the command or script to execute as the workload'
@@ -28,8 +32,7 @@ def add_workload_options(parser: argparse.ArgumentParser) -> None:
 
     workload_options.add_argument(
         '-it', '--iteration',
-        nargs=1,
-        type=int,
+        type=positive_int,
         default=1,
         help='define the number of iterations to run the workload (default: 1)'
     )
@@ -47,7 +50,6 @@ def add_options(parser: argparse.ArgumentParser) -> None:
 
     options.add_argument(
         '-cmp', '--compare',
-        nargs=1,
         type=int,
         help='compare with a specific number of previous runs'
     )
@@ -85,3 +87,12 @@ def add_options(parser: argparse.ArgumentParser) -> None:
         action='help',
         help='show this help message and exit'
     )
+
+def positive_int(value: str) -> int:
+    try:
+        ivalue = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f'Invalid integer value: {value}')
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError(f'Iteration count must be greater than 0, got {ivalue}')
+    return ivalue

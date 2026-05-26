@@ -191,12 +191,12 @@ class CPUMetric:
         return f"CPUMetric(l1_cache={self.l1_cache}, l2_cache={self.l2_cache}, l3_cache={self.l3_cache}, branch_prediction={self.branch_prediction})"
 
 class GPUMetric:
-    def __init__(self):
-        self.utilization = "N/A"
-        self.memory_usage = "N/A"
-    
+    def __init__(self, gpu_utilization: float, vram_utilization: float):
+        self.gpu_utilization = gpu_utilization
+        self.vram_utilization = vram_utilization
+
     def __repr__(self):
-        return f"GPUMetric(utilization='{self.utilization}', memory_usage='{self.memory_usage}')"
+        return f"GPUMetric(gpu_utilization={self.gpu_utilization}, vram_utilization={self.vram_utilization})"
 
 class MemoryMetric:
     def __init__(
