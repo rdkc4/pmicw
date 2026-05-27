@@ -1,9 +1,11 @@
 from measurement import (
-    BranchPredictionMetric, 
+    BranchPredictionMetric,
+    GPUMetric, 
     IPCMetric, 
     L1CacheMetric, 
     L2CacheMetric,
     LLCacheMetric,
+    MemoryMetric,
     MetricStats,
     SystemMetric, 
     WallTimeMetric
@@ -100,6 +102,30 @@ def compute_system_metrics(system_records: list[dict[str, float]]) -> SystemMetr
         major_faults_stats     = compute_stats_metrics(counters["major-faults"]),
     )
     
+def compute_memory_metrics(memory_records: list[dict[str, float]]) -> MemoryMetric:
+    mem = []
+    swp = []
+    for record in memory_records:
+        mem.append(record["mem_pct"])
+        swp.append(record["swp_pct"])
+
+    return MemoryMetric(
+        mem_stats  = compute_stats_metrics(mem),
+        swap_stats = compute_stats_metrics(swp)
+    )
+
+def compute_gpu_metrics(gpu_records: list[dict[str, float]]) -> GPUMetric:
+    activity = []
+    vram     = []
+    for record in gpu_records:
+        activity.append(record["gfx_activity_pct"])
+        vram.append(record["vram_pct"])
+
+    return GPUMetric(
+        activity_stats = compute_stats_metrics(activity),
+        vram_stats     = compute_stats_metrics(vram)
+    )
+
 def compute_stats_metrics(metrics: list[float]) -> MetricStats:
     return MetricStats(
         mean_value   = mean(metrics)   if metrics          else 0.0,

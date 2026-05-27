@@ -185,8 +185,8 @@ class CPUMetric:
 
 @dataclass
 class GPUMetric:
-    gpu_utilization:  float
-    vram_utilization: float
+    activity_stats: MetricStats
+    vram_stats:     MetricStats
 
 @dataclass
 class MemoryMetric:
