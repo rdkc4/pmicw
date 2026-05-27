@@ -1,3 +1,33 @@
+"""
+Orchestration and Workload Execution Engine.
+
+This module coordinates the active profiling lifecycle. It parses user requests,
+spawns asynchronous background resource samplers, executes target workloads under
+hardware counters, and routes collected payloads to the aggregation layer.
+
+Asynchronous Thread Coordination Model:
+    [Main Thread]                   [Background Threads]
+          |                                  |
+          |--> mem_thread.start() ---------->| (Idle / Event Blocked)
+          |--> gpu_thread.start() ---------->| (Idle / Event Blocked)
+          |                                  |
+       |->| Loop: Iteration                  |
+       |  |--> activity_event.set() -------->| (Wake up & sample hardware)
+       |  |--> subprocess.run(workload)      | (Active Execution)
+       |  |--> activity_event.clear() ------>| (Pause sampling)
+       |--|
+          |
+          |--> shutdown_event.set() -------->| (Break loop & terminate)
+          |--> Join Threads <----------------|
+
+Error Isolation & Resource Guarantees:
+    - Daemon threads are safely captured in a lifecycle registration list.
+    - A blanket `finally` context guarantees background samplers are signaled 
+      to spin down and cleanly joined, eliminating runaway background processes.
+
+Usage:
+    $ python3 ./workload_runner.py workload [workload-options] [options]
+"""
 import argparse
 import subprocess
 import threading
@@ -98,7 +128,6 @@ def run_workload(args: argparse.Namespace) -> None:
     finally:
         shutdown_event.set()
         for daemon in daemon_threads:
-            daemon.join()
             daemon.join()
 
     wall_time_metric = compute_wall_time_metric(wall_times)
