@@ -1,3 +1,53 @@
+"""
+CLI Parsing Module for the Workload Profiler.
+
+This module exposes the command-line interface structure using `argparse`.
+
+Expected Syntax:
+    <workload> [workload-options] [options]
+
+Core Structural Rules:
+ - [positional]:
+    - `workload` is a mandatory positional argument
+ 
+ - [workload-options]:
+    - `-args`, `--arguments` - list of arguments for the workload separated by space
+                             - usage: [--arguments <argument-1> <argument-2> ... <argument-n>]
+
+    - `-it`, `--iteration` - number of iterations workload should run
+                           - default: 1
+                           - usage: [--iteration <n>]
+    
+ - [options]
+    - `-m`, `--metric` - list of metrics separated by space
+                       - options: wall-time, cpu, gpu, memory
+                       - default: wall-time (always included)
+                       - usage: [--metric wall-time cpu gpu memory]
+
+    - `-cmp`, `--compare` - compare current results with n previous results
+                          - usage: [--compare <n>]
+
+    - `-cmp2`, `--compare-two` - compare two specific versions
+                               - usage: [--compare-two <version-1> <version-2>]
+
+    - `-cmpw`, `--compare-with` - compare current version with a specific version
+                                - usage: [--compare-with <version>]
+
+    - `-rfmt`, `--report-format` - list of report formats separated by space 
+                                 - format in which comparison data should be reported
+                                 - options: csv, json, html 
+                                 - default: csv
+                                 - usage: [--report-format csv json html]
+
+    - `-vfmt`, `--visual-format` - list of visual formats separated by space
+                                 - format in which the comparison data should be displayed
+                                 - options: table, chart, graph
+                                 - default: graph
+                                 - usage [--visual-format table chart graph]
+    
+    - `-help`, `--help` - shows help message and exits
+"""
+
 import argparse
 
 def parse_args() -> argparse.Namespace:
@@ -43,7 +93,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     options.add_argument(
         '-m', '--metric',
         nargs   = '*',
-        default = 'wall-time',
+        default = ['wall-time'],
         choices = ['wall-time', 'cpu', 'gpu', 'memory'],
         help    = 'metrics to collect separated by space (default: wall-time)'
     )
@@ -69,7 +119,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     options.add_argument(
         '-rfmt', '--report-format',
         nargs   = '*',
-        default = 'csv',
+        default = ['csv'],
         choices = ['json', 'csv', 'html'],
         help    = 'report formats separated by space (default: csv)'
     )
@@ -77,7 +127,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     options.add_argument(
         '-vfmt', '--visual-format',
         nargs   = '*',
-        default = 'graph',
+        default = ['graph'],
         choices = ['table', 'chart', 'graph'],
         help    = 'visualization formats separated by space (default: graph)'
     )
