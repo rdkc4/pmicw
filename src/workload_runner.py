@@ -14,7 +14,7 @@ from metric_computer import (
     compute_shared_cache_metrics
 )
 from metric_monitor import monitor_amd_gpu, monitor_memory
-from record_parser import parse_perf_json_records
+from record_parser import parse_perf_output
 
 def run_workload(args: argparse.Namespace) -> None:
     wall_times:     list[float]            = []
@@ -37,12 +37,12 @@ def run_workload(args: argparse.Namespace) -> None:
 
     mem_thread = threading.Thread(
         target = monitor_memory,
-        args   = (activity_event, shutdown_event, 0.05, memory_records),
+        args   = (activity_event, shutdown_event, 0.1, memory_records),
         daemon = True
     )
     gpu_thread = threading.Thread(
         target = monitor_amd_gpu,
-        args   = (activity_event, shutdown_event, 0.05, gpu_records),
+        args   = (activity_event, shutdown_event, 0.1, gpu_records),
         daemon = True
     )
 
@@ -73,14 +73,8 @@ def run_workload(args: argparse.Namespace) -> None:
                 duration_ms = (time.perf_counter() - start) * 1000
                 wall_times.append(duration_ms)
 
-                json_record = []
-                for line in proc.stderr.splitlines():
-                    try:
-                        json_record.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        pass
-                
-                perf_records[event_set_k].append(parse_perf_json_records(json_record))
+                perf_records[event_set_k].append(parse_perf_output(proc.stderr))
+
     finally:
         shutdown_event.set()
         mem_thread.join()
