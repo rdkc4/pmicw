@@ -56,23 +56,23 @@ class GPUInfo:
             devices = amdsmi.amdsmi_get_processor_handles()
 
             if len(devices) > 0:
-                info            = amdsmi.amdsmi_get_gpu_asic_info(devices[0])
-                mem_info        = amdsmi.amdsmi_get_gpu_vram_usage(devices[0])
-                self.model      = info.get('market_name', 'N/A')
-                self.target     = info.get('target_graphics_version', 'N/A')
-                self.vram_total = mem_info.get('vram_total', 'N/A')
-                self.vram_used  = mem_info.get('vram_used', 'N/A')
+                info               = amdsmi.amdsmi_get_gpu_asic_info(devices[0])
+                mem_info           = amdsmi.amdsmi_get_gpu_vram_usage(devices[0])
+                self.model         = info.get('market_name', 'N/A')
+                self.target        = info.get('target_graphics_version', 'N/A')
+                self.vram_total_mb = mem_info.get('vram_total', 'N/A')
+                self.vram_used_mb  = mem_info.get('vram_used', 'N/A')
             else:
-                self.model      = "N/A"
-                self.target     = "N/A"
-                self.vram_total = "N/A"
-                self.vram_used  = "N/A"
+                self.model         = "N/A"
+                self.target        = "N/A"
+                self.vram_total_mb = "N/A"
+                self.vram_used_mb  = "N/A"
 
         except:
-            self.model      = "N/A"
-            self.target     = "N/A"
-            self.vram_total = "N/A"
-            self.vram_used  = "N/A"
+            self.model         = "N/A"
+            self.target        = "N/A"
+            self.vram_total_mb = "N/A"
+            self.vram_used_mb  = "N/A"
 
         finally:
             try:
@@ -81,22 +81,22 @@ class GPUInfo:
                 pass
 
     def __repr__(self):
-        return f"GPUInfo(model='{self.model}', target='{self.target}', vram_total='{self.vram_total}', vram_used='{self.vram_used}')"
+        return f"GPUInfo(model='{self.model}', target='{self.target}', vram_total_mb='{self.vram_total_mb}', vram_used_mb='{self.vram_used_mb}')"
 
 class MemoryInfo:
     def __init__(self):
-        mem             = psutil.virtual_memory()
-        swp             = psutil.swap_memory()
-        self.total      = mem.total
-        self.available  = mem.available
-        self.used       = mem.used
-        self.free       = mem.free
-        self.swap_total = swp.total
-        self.swap_used  = swp.used
-        self.swap_free  = swp.free
-    
+        mem                = psutil.virtual_memory()
+        swp                = psutil.swap_memory()
+        self.total_mb      = mem.total     / (1024 ** 2)
+        self.available_mb  = mem.available / (1024 ** 2)
+        self.used_mb       = mem.used      / (1024 ** 2)
+        self.free_mb       = mem.free      / (1024 ** 2)
+        self.swap_total_mb = swp.total     / (1024 ** 2)
+        self.swap_used_mb  = swp.used      / (1024 ** 2)
+        self.swap_free_mb  = swp.free      / (1024 ** 2)
+
     def __repr__(self):
-        return f"MemoryInfo(total={self.total}, available={self.available}, used={self.used}, free={self.free}, swap_total={self.swap_total}, swap_used={self.swap_used}, swap_free={self.swap_free})"
+        return f"MemoryInfo(total_mb={self.total_mb}, available_mb={self.available_mb}, used_mb={self.used_mb}, free_mb={self.free_mb}, swap_total_mb={self.swap_total_mb}, swap_used_mb={self.swap_used_mb}, swap_free_mb={self.swap_free_mb})"
 
 class HardwareInfo:
     def __init__(self):
@@ -108,8 +108,8 @@ class HardwareInfo:
         return f"HardwareInfo(cpu={self.cpu}, gpu={self.gpu}, memory={self.memory})"
 
 class Metadata:
-    def __init__(self, run_id: uuid.UUID):
-        self.run_id    = run_id
+    def __init__(self):
+        self.run_id    = uuid.uuid4()
         self.timestamp = datetime.datetime.now().isoformat()
         self.version   = Version()
         self.software  = SoftwareInfo()
@@ -163,9 +163,9 @@ class L2CacheMetric:
 
 @dataclass
 class LLCacheMetric:
-    total_accesses:   int
-    total_misses:     int
-    total_miss_rate:  float
+    total_accesses:      int
+    total_misses:        int
+    total_miss_rate:     float
     llc_miss_rate_stats: MetricStats
 
 @dataclass
@@ -185,7 +185,7 @@ class CPUMetric:
 
 @dataclass
 class GPUMetric:
-    gpu_utilization: float
+    gpu_utilization:  float
     vram_utilization: float
 
 @dataclass

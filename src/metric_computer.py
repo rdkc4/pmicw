@@ -17,11 +17,12 @@ def compute_wall_time_metric(wall_times: list[float]) -> WallTimeMetric:
         wall_time_stats = compute_stats_metrics(wall_times)
     )
 
-def compute_core_cpu_metrics(core_records: list[dict[str, float]]) -> tuple[IPCMetric, BranchPredictionMetric]:
+def compute_execution_core_metrics(core_records: list[dict[str, float]]) -> tuple[IPCMetric, BranchPredictionMetric, SystemMetric]:
     ipc_metrics               = compute_ipc_metrics(core_records)
     branch_prediction_metrics = compute_branch_prediction_metrics(core_records)
+    system_metrics            = compute_system_metrics(core_records)
     
-    return ipc_metrics, branch_prediction_metrics
+    return ipc_metrics, branch_prediction_metrics, system_metrics
 
 def compute_ipc_metrics(core_records: list[dict[str, float]]) -> IPCMetric:
     total_instructions, total_cycles, ipc_stats = compute_ratio_metrics(core_records, "instructions", "cycles")
@@ -43,6 +44,12 @@ def compute_branch_prediction_metrics(core_records: list[dict[str, float]]) -> B
         branch_miss_rate_stats  = branch_miss_rate_stats
     )
 
+def compute_private_cache_metrics(private_cache_records: list[dict[str, float]]) -> tuple[L1CacheMetric, L2CacheMetric]:
+    l1_cache_metrics = compute_l1_cache_metrics(private_cache_records)
+    l2_cache_metrics = compute_l2_cache_metrics(private_cache_records)
+
+    return l1_cache_metrics, l2_cache_metrics
+
 def compute_l1_cache_metrics(l1_records: list[dict[str, float]]) -> L1CacheMetric:
     total_l1_misses, total_l1_accesses, l1_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-dcache-load-misses", "L1-dcache-loads")
 
@@ -63,8 +70,8 @@ def compute_l2_cache_metrics(l2_records: list[dict[str, float]]) -> L2CacheMetri
         l2_miss_rate_stats = l2_miss_rate_stats
     )
 
-def compute_llc_cache_metrics(llc_records: list[dict[str, float]]) -> LLCacheMetric:
-    total_llc_misses, total_llc_accesses, llc_miss_rate_stats = compute_ratio_metrics(llc_records, "cache-misses", "cache-references")
+def compute_shared_cache_metrics(shared_cache_records: list[dict[str, float]]) -> LLCacheMetric:
+    total_llc_misses, total_llc_accesses, llc_miss_rate_stats = compute_ratio_metrics(shared_cache_records, "cache-misses", "cache-references")
 
     return LLCacheMetric(
         total_accesses      = int(total_llc_accesses),
@@ -108,12 +115,12 @@ def compute_ratio_metrics(records: list[dict[str, float]], numerator_key: str, d
     total_denominator = 0
 
     for record in records:
-        numerator = record.get(numerator_key)
+        numerator   = record.get(numerator_key)
         denominator = record.get(denominator_key)
 
         if numerator is not None and denominator is not None and denominator > 0:
             ratio_values.append(numerator / denominator)
-            total_numerator += numerator
+            total_numerator   += numerator
             total_denominator += denominator
 
     return total_numerator, total_denominator, compute_stats_metrics(ratio_values)
