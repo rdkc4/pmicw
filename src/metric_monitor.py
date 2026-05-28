@@ -3,46 +3,27 @@ import threading
 import time
 import psutil
 import amdsmi
-from typing import Callable
 
 from record_parser import parse_rocm_smi_output
 
-def start_monitor(
-    target:         Callable[[threading.Event, threading.Event, float, list[dict[str, float]]], None],
-    activity_event: threading.Event,
-    shutdown_event: threading.Event,
-    interval:       float,
-    records:        list[dict[str, float]]
-) -> threading.Thread:
-    
-    monitor_thread = threading.Thread(
-        target     = target,
-        args       = (activity_event, shutdown_event, interval, records),
-        daemon     = True
-    )
-    monitor_thread.start()
-    return monitor_thread
+def monitor_process_memory(proc: subprocess.Popen, psutil_proc: psutil.Process, interval: float) -> list[dict[str, float]]:
+    records: list[dict[str, float]] = []
 
-def monitor_memory(
-    activity_event: threading.Event, 
-    shutdown_event: threading.Event, 
-    interval:       float, 
-    memory_records: list[dict[str, float]]
-):
-    while not shutdown_event.is_set():
-        activity_event.wait()
-        if shutdown_event.is_set():
-            break
-        
-        mem = psutil.virtual_memory()
-        swp = psutil.swap_memory()
+    try:
+        while proc.poll() is None:
+            mem = psutil_proc.memory_info()
 
-        memory_records.append({
-            "mem_pct": mem.percent,
-            "swp_pct": swp.percent
-        })
+            records.append({
+                "rss_mb": mem.rss / (1024 ** 2),
+                "vms_mb": mem.vms / (1024 ** 2),
+            })
 
-        time.sleep(interval)
+            time.sleep(interval)
+
+    except psutil.NoSuchProcess:
+        pass
+
+    return records
 
 def monitor_amd_gpu(
     activity_event: threading.Event, 
