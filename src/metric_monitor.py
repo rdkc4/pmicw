@@ -3,8 +3,25 @@ import threading
 import time
 import psutil
 import amdsmi
+from typing import Callable
 
 from record_parser import parse_rocm_smi_output
+
+def start_monitor(
+    target:         Callable[[threading.Event, threading.Event, float, list[dict[str, float]]], None],
+    activity_event: threading.Event,
+    shutdown_event: threading.Event,
+    interval:       float,
+    records:        list[dict[str, float]]
+) -> threading.Thread:
+    
+    monitor_thread = threading.Thread(
+        target     = target,
+        args       = (activity_event, shutdown_event, interval, records),
+        daemon     = True
+    )
+    monitor_thread.start()
+    return monitor_thread
 
 def monitor_memory(
     activity_event: threading.Event, 

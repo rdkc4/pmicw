@@ -16,7 +16,11 @@ Core Structural Rules:
 
     - `-it`, `--iteration` - number of iterations workload should run
                            - default: 1
-                           - usage: [--iteration <n>]
+                           - usage: [--iteration <n>], where n > 0
+
+    - `-wit`, `--warmup-iteration` - number of warmup iterations workload should run
+                                   - default: 0
+                                   - usage: [--warmup-iteration <n>], where n > 0 
     
  - [options]
     - `-m`, `--metric` - list of metrics separated by space
@@ -25,7 +29,7 @@ Core Structural Rules:
                        - usage: [--metric wall-time cpu gpu memory]
 
     - `-cmp`, `--compare` - compare current results with n previous results
-                          - usage: [--compare <n>]
+                          - usage: [--compare <n>], where n > 0
 
     - `-cmp2`, `--compare-two` - compare two specific versions
                                - usage: [--compare-two <version-1> <version-2>]
@@ -87,6 +91,13 @@ def add_workload_options(parser: argparse.ArgumentParser) -> None:
         help    = 'define the number of iterations to run the workload (default: 1)'
     )
 
+    workload_options.add_argument(
+        '-wit', '--warmup-iteration',
+        type    = positive_int,
+        default = 0,
+        help    = 'define the number of iterations to run the warmup for the workload (default: 0)'
+    )
+
 def add_options(parser: argparse.ArgumentParser) -> None:
     options = parser.add_argument_group('options')
 
@@ -100,7 +111,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
 
     options.add_argument(
         '-cmp', '--compare',
-        type = int,
+        type = positive_int,
         help = 'compare with a specific number of previous runs'
     )
 

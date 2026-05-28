@@ -203,6 +203,15 @@ class IPCMetric:
     ipc_stats:          MetricStats
 
 @dataclass
+class TaskClockMetric:
+    """
+    CPU time consumed by the profiled task, measured via perf task-clock events.
+    total_ms represents the accumulated task-clock time across all iterations.
+    """
+    total_ms:         float
+    task_clock_stats: MetricStats
+
+@dataclass
 class L1CacheMetric:
     """
     Private L1 cache localization and data-miss trends.
@@ -252,6 +261,7 @@ class CPUMetric:
     Aggregates compute intensity, pipeline hazards, and memory-subsystem cache hierarchies.
     """
     ipc:               IPCMetric
+    task_clock:        TaskClockMetric
     l1_cache:          L1CacheMetric
     l2_cache:          L2CacheMetric
     llc_cache:         LLCacheMetric
@@ -298,10 +308,10 @@ class SystemMetric:
 class Metrics:
     """The unified mathematical metric encompassing all active profiling vectors."""
     wall_time: WallTimeMetric
-    cpu:       CPUMetric
-    gpu:       GPUMetric
-    memory:    MemoryMetric
-    system:    SystemMetric
+    cpu:       CPUMetric    | None
+    gpu:       GPUMetric    | None
+    memory:    MemoryMetric | None
+    system:    SystemMetric | None
 
 class Measurement:
     """

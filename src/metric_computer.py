@@ -1,5 +1,6 @@
 from measurement import (
     BranchPredictionMetric,
+    CPUMetric,
     GPUMetric, 
     IPCMetric, 
     L1CacheMetric, 
@@ -7,11 +8,53 @@ from measurement import (
     LLCacheMetric,
     MemoryMetric,
     MetricStats,
-    SystemMetric, 
+    Metrics,
+    SystemMetric,
+    TaskClockMetric, 
     WallTimeMetric
 )
 from statistics import mean, median, stdev
 from collections import defaultdict
+
+def compute_metrics(
+    selected_metrics: list[str], 
+    wall_times:       list[float],
+    perf_records:     dict[str, list[dict[str, float]]], 
+    memory_records:   list[dict[str, float]], 
+    gpu_records:      list[dict[str, float]]
+) -> Metrics:
+    cpu_metrics       = None
+    system_metrics    = None
+    memory_metrics    = None
+    gpu_metrics       = None
+    wall_time_metrics = compute_wall_time_metric(wall_times)
+
+    if "cpu" in selected_metrics:
+        ipc_metric, task_clock_metric, branch_prediction_metric, system_metrics = compute_execution_core_metrics(perf_records["execution_core"])
+        l1_cache_metric, l2_cache_metric                                        = compute_private_cache_metrics(perf_records["private_caches"])
+        llc_cache_metric                                                        = compute_shared_cache_metrics(perf_records["shared_caches"])
+
+        cpu_metrics = CPUMetric(
+            ipc               = ipc_metric,
+            task_clock        = task_clock_metric,
+            l1_cache          = l1_cache_metric,
+            l2_cache          = l2_cache_metric,
+            llc_cache         = llc_cache_metric,
+            branch_prediction = branch_prediction_metric,
+        )
+    if "memory" in selected_metrics:
+        memory_metrics = compute_memory_metrics(memory_records)
+    
+    if "gpu" in selected_metrics:
+        gpu_metrics = compute_gpu_metrics(gpu_records)
+
+    return Metrics(
+        wall_time = wall_time_metrics,
+        cpu       = cpu_metrics,
+        gpu       = gpu_metrics,
+        memory    = memory_metrics,
+        system    = system_metrics
+    )
 
 def compute_wall_time_metric(wall_times: list[float]) -> WallTimeMetric:
     return WallTimeMetric(
@@ -19,12 +62,13 @@ def compute_wall_time_metric(wall_times: list[float]) -> WallTimeMetric:
         wall_time_stats = compute_stats_metrics(wall_times)
     )
 
-def compute_execution_core_metrics(core_records: list[dict[str, float]]) -> tuple[IPCMetric, BranchPredictionMetric, SystemMetric]:
+def compute_execution_core_metrics(core_records: list[dict[str, float]]) -> tuple[IPCMetric, TaskClockMetric, BranchPredictionMetric, SystemMetric]:
     ipc_metrics               = compute_ipc_metrics(core_records)
+    task_clock_metrics        = compute_task_clock_metrics(core_records)
     branch_prediction_metrics = compute_branch_prediction_metrics(core_records)
     system_metrics            = compute_system_metrics(core_records)
     
-    return ipc_metrics, branch_prediction_metrics, system_metrics
+    return ipc_metrics, task_clock_metrics, branch_prediction_metrics, system_metrics
 
 def compute_ipc_metrics(core_records: list[dict[str, float]]) -> IPCMetric:
     total_instructions, total_cycles, ipc_stats = compute_ratio_metrics(core_records, "instructions", "cycles")
@@ -35,6 +79,23 @@ def compute_ipc_metrics(core_records: list[dict[str, float]]) -> IPCMetric:
         total_ipc          = (total_instructions / total_cycles) if total_cycles > 0 else 0.0,
         ipc_stats          = ipc_stats
     )
+
+def compute_task_clock_metrics(core_records: list[dict[str, float]]) -> TaskClockMetric:
+    task_clock_values   = []
+    total_task_clock_ms = 0
+
+    for record in core_records:
+        task_clock = record.get('task-clock')
+        if task_clock:
+            task_clock_ms        = task_clock / 1000
+            total_task_clock_ms += task_clock_ms
+            task_clock_values.append(task_clock_ms)
+
+    return TaskClockMetric(
+        total_ms         = total_task_clock_ms,
+        task_clock_stats = compute_stats_metrics(task_clock_values)
+    )
+
 
 def compute_branch_prediction_metrics(core_records: list[dict[str, float]]) -> BranchPredictionMetric:
     total_branch_misses, total_branches, branch_miss_rate_stats = compute_ratio_metrics(core_records, "branch-misses", "branches")
