@@ -161,17 +161,15 @@ class Metadata:
     def __repr__(self):
         return f"Metadata(run_id='{self.run_id}', timestamp='{self.timestamp}', version={self.version}, software={self.software}, hardware={self.hardware})"
 
+@dataclass
 class Workload:
     """
     Configuration and iteration tracking
     """
-    def __init__(self, name: str, arguments: list[str], iteration: int):
-        self.name      = name
-        self.arguments = arguments
-        self.iteration = iteration
-
-    def __repr__(self):
-        return f"Workload(name='{self.name}', arguments={self.arguments}, iteration={self.iteration})"
+    name:              str 
+    iterations:        int
+    warmup_iterations: int
+    arguments:         list[str] 
 
 @dataclass
 class MetricStats:

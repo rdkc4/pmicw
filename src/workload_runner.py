@@ -38,6 +38,7 @@ import os
 import psutil
 
 from cli_parser import parse_args
+from measurement import Measurement, Metadata, Metrics, Workload
 from metric_computer import compute_metrics
 from metric_monitor import monitor_amd_gpu, monitor_process_memory
 from record_parser import parse_cpu_prof_output
@@ -73,7 +74,7 @@ class PerfGroupConfig:
     events: list[str]
     env:    dict[str, str] | None
 
-def run_workload(ctx: WorkloadContext) -> None:
+def run_workload(ctx: WorkloadContext) -> Metrics:
     perf_event_groups = set_perf_events("cpu" in ctx.selected_metrics, ctx.env)
 
     if "gpu" in ctx.selected_metrics:
@@ -131,7 +132,7 @@ def run_workload(ctx: WorkloadContext) -> None:
         ctx.records.link_records
     )
 
-    print(metrics)
+    return metrics
 
 def warmup_workload(command: list[str], warmup_iterations: int = 0) -> None:
     for _ in range(warmup_iterations):
@@ -260,10 +261,29 @@ def setup_workload_context(args: argparse.Namespace):
         monitors          = monitors
     )
 
+def assemble_workload(args: argparse.Namespace) -> Workload:
+    return Workload(
+        name              = args.workload,
+        iterations        = args.iteration,
+        warmup_iterations = args.warmup_iteration,
+        arguments         = args.arguments
+    )
+
+def assemble_measurement(workload: Workload, metrics: Metrics) -> Measurement:
+    return Measurement(
+        metadata  = Metadata(),
+        workload = workload,
+        metrics  = metrics
+    )
+
 def main():
-    args = parse_args()
-    ctx  = setup_workload_context(args)
-    run_workload(ctx)
+    args        = parse_args()
+    ctx         = setup_workload_context(args)
+    workload    = assemble_workload(args)
+    metrics     = run_workload(ctx)
+    measurement = assemble_measurement(workload, metrics)
+    print(measurement)
+
 
 if __name__ == "__main__":
     main()
