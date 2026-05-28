@@ -19,6 +19,7 @@ Data Model Hierarchy Map:
         |-> GPUMetric
         |-> MemoryMetric
         |-> SystemMetric
+        |-> StartupMetric
 """
 
 from dataclasses import dataclass
@@ -217,10 +218,12 @@ class L1CacheMetric:
     Private L1 cache localization and data-miss trends.
     miss rate unit: %.
     """
-    total_accesses:     int
-    total_misses:       int
-    total_miss_rate:    float
-    l1_miss_rate_stats: MetricStats
+    totald_accesses:     int
+    totald_misses:       int
+    totali_accesses:     int
+    totali_misses:       int
+    l1d_miss_rate_stats: MetricStats
+    l1i_miss_rate_stats: MetricStats
 
 @dataclass
 class L2CacheMetric:
@@ -280,10 +283,10 @@ class GPUMetric:
 class MemoryMetric:
     """
     Host volatile workspace allocations sampled via psutil tracking threads.
-    MEM and SWP units: %
+    rss and vms units: mb
     """
-    mem_stats:  MetricStats
-    swap_stats: MetricStats
+    rss_stats: MetricStats
+    vms_stats: MetricStats
 
 @dataclass
 class SystemMetric:
@@ -305,13 +308,25 @@ class SystemMetric:
     major_faults_stats:     MetricStats
 
 @dataclass
+class StartupMetric:
+    """
+    Measures dynamic linker (ld.so) startup overhead captured via LD_DEBUG=statistics.
+    Startup time stats represent mean, median, stddev, min, max startup time
+    startup_time_stats unit: ms
+    """
+    total_cycles:       int
+    total_link_cycles:  int
+    startup_time_stats: MetricStats
+
+@dataclass
 class Metrics:
     """The unified mathematical metric encompassing all active profiling vectors."""
     wall_time: WallTimeMetric
-    cpu:       CPUMetric    | None
-    gpu:       GPUMetric    | None
-    memory:    MemoryMetric | None
-    system:    SystemMetric | None
+    cpu:       CPUMetric     | None
+    gpu:       GPUMetric     | None
+    memory:    MemoryMetric  | None
+    system:    SystemMetric  | None
+    startup:   StartupMetric | None
 
 class Measurement:
     """

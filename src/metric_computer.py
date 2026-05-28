@@ -9,6 +9,7 @@ from measurement import (
     MemoryMetric,
     MetricStats,
     Metrics,
+    StartupMetric,
     SystemMetric,
     TaskClockMetric, 
     WallTimeMetric
@@ -21,19 +22,23 @@ def compute_metrics(
     wall_times:       list[float],
     perf_records:     dict[str, list[dict[str, float]]], 
     memory_records:   list[dict[str, float]], 
-    gpu_records:      list[dict[str, float]]
+    gpu_records:      list[dict[str, float]],
+    link_records:     list[dict[str, float]]
 ) -> Metrics:
     cpu_metrics       = None
     system_metrics    = None
     memory_metrics    = None
     gpu_metrics       = None
+    startup_metrics   = None
     wall_time_metrics = compute_wall_time_metric(wall_times)
 
     if "cpu" in selected_metrics:
         ipc_metric, task_clock_metric, branch_prediction_metric, system_metrics = compute_execution_core_metrics(perf_records["execution_core"])
-        l1_cache_metric, l2_cache_metric                                        = compute_private_cache_metrics(perf_records["private_caches"])
-        llc_cache_metric                                                        = compute_shared_cache_metrics(perf_records["shared_caches"])
-
+        l1_cache_metric                                                         = compute_l1_cache_metrics(perf_records["l1_caches"])
+        l2_cache_metric                                                         = compute_l2_cache_metrics(perf_records["l2_llc_caches"])
+        llc_cache_metric                                                        = compute_shared_cache_metrics(perf_records["l2_llc_caches"])
+        startup_metrics                                                         = compute_startup_metrics(link_records, task_clock_metric.task_clock_stats.mean_value)
+        
         cpu_metrics = CPUMetric(
             ipc               = ipc_metric,
             task_clock        = task_clock_metric,
@@ -42,6 +47,7 @@ def compute_metrics(
             llc_cache         = llc_cache_metric,
             branch_prediction = branch_prediction_metric,
         )
+
     if "memory" in selected_metrics:
         memory_metrics = compute_memory_metrics(memory_records)
     
@@ -53,7 +59,8 @@ def compute_metrics(
         cpu       = cpu_metrics,
         gpu       = gpu_metrics,
         memory    = memory_metrics,
-        system    = system_metrics
+        system    = system_metrics,
+        startup   = startup_metrics
     )
 
 def compute_wall_time_metric(wall_times: list[float]) -> WallTimeMetric:
@@ -87,7 +94,7 @@ def compute_task_clock_metrics(core_records: list[dict[str, float]]) -> TaskCloc
     for record in core_records:
         task_clock = record.get('task-clock')
         if task_clock:
-            task_clock_ms        = task_clock / 1000
+            task_clock_ms        = task_clock / 1000000
             total_task_clock_ms += task_clock_ms
             task_clock_values.append(task_clock_ms)
 
@@ -107,20 +114,17 @@ def compute_branch_prediction_metrics(core_records: list[dict[str, float]]) -> B
         branch_miss_rate_stats  = branch_miss_rate_stats
     )
 
-def compute_private_cache_metrics(private_cache_records: list[dict[str, float]]) -> tuple[L1CacheMetric, L2CacheMetric]:
-    l1_cache_metrics = compute_l1_cache_metrics(private_cache_records)
-    l2_cache_metrics = compute_l2_cache_metrics(private_cache_records)
-
-    return l1_cache_metrics, l2_cache_metrics
-
 def compute_l1_cache_metrics(l1_records: list[dict[str, float]]) -> L1CacheMetric:
-    total_l1_misses, total_l1_accesses, l1_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-dcache-load-misses", "L1-dcache-loads")
-
+    total_l1d_misses, total_l1d_accesses, l1d_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-dcache-load-misses", "L1-dcache-loads")
+    total_l1i_misses, total_l1i_accesses, l1i_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-icache-load-misses", "L1-icache-loads")
+    
     return L1CacheMetric(
-        total_accesses     = int(total_l1_accesses),
-        total_misses       = int(total_l1_misses),
-        total_miss_rate    = (total_l1_misses / total_l1_accesses) if total_l1_accesses > 0 else 0.0,
-        l1_miss_rate_stats = l1_miss_rate_stats
+        totald_accesses     = int(total_l1d_accesses),
+        totald_misses       = int(total_l1d_misses),
+        totali_accesses     = int(total_l1i_accesses),
+        totali_misses       = int(total_l1i_misses),
+        l1d_miss_rate_stats = l1d_miss_rate_stats,
+        l1i_miss_rate_stats = l1i_miss_rate_stats
     )
 
 def compute_l2_cache_metrics(l2_records: list[dict[str, float]]) -> L2CacheMetric:
@@ -164,15 +168,15 @@ def compute_system_metrics(system_records: list[dict[str, float]]) -> SystemMetr
     )
     
 def compute_memory_metrics(memory_records: list[dict[str, float]]) -> MemoryMetric:
-    mem = []
-    swp = []
+    rss = []
+    vms = []
     for record in memory_records:
-        mem.append(record["mem_pct"])
-        swp.append(record["swp_pct"])
+        rss.append(record["rss_mb"])
+        vms.append(record["vms_mb"])
 
     return MemoryMetric(
-        mem_stats  = compute_stats_metrics(mem),
-        swap_stats = compute_stats_metrics(swp)
+        rss_stats = compute_stats_metrics(rss),
+        vms_stats = compute_stats_metrics(vms)
     )
 
 def compute_gpu_metrics(gpu_records: list[dict[str, float]]) -> GPUMetric:
@@ -186,6 +190,22 @@ def compute_gpu_metrics(gpu_records: list[dict[str, float]]) -> GPUMetric:
         activity_stats = compute_stats_metrics(activity),
         vram_stats     = compute_stats_metrics(vram)
     )
+
+def compute_startup_metrics(link_records: list[dict[str, float]], mean_task_clock: float) -> StartupMetric:
+    link_cycles, cycles, cycle_ratio = compute_ratio_metrics(link_records, "ld", "cycles")
+
+    return StartupMetric(
+        total_cycles       = int(cycles),
+        total_link_cycles  = int(link_cycles),
+        startup_time_stats = MetricStats(
+            mean_value     = cycle_ratio.mean_value   * mean_task_clock,
+            median_value   = cycle_ratio.median_value * mean_task_clock,
+            stddev_value   = cycle_ratio.stddev_value * mean_task_clock,
+            min_value      = cycle_ratio.min_value    * mean_task_clock,
+            max_value      = cycle_ratio.max_value    * mean_task_clock
+        )
+    )
+
 
 def compute_stats_metrics(metrics: list[float]) -> MetricStats:
     return MetricStats(
