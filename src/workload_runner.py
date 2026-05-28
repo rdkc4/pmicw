@@ -238,8 +238,8 @@ def setup_workload_context(args: argparse.Namespace):
         gpu_records    = [],
         perf_records   = {
             "execution_core": [],
-            "private_caches": [],
-            "shared_caches":  []
+            "l1_caches":      [],
+            "l2_llc_caches":  []
         },
         link_records   = []
     )
