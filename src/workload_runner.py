@@ -202,18 +202,20 @@ def set_perf_events(cpu_selected: bool, env: dict[str,str] | None = None) -> lis
                 env    = env
             ),
             PerfGroupConfig(
-                name   = "private_caches",
+                name   = "l1_caches",
                 events = [
                     "L1-dcache-loads",
                     "L1-dcache-load-misses",
-                    "l2_cache_req_stat.all",
-                    "l2_cache_req_stat.ic_dc_miss_in_l2"
+                    "L1-icache-loads",
+                    "L1-icache-load-misses"
                 ],
                 env    = None
             ),
             PerfGroupConfig(
-                name   = "shared_caches",
+                name   = "l2_llc_caches",
                 events = [
+                    "l2_cache_req_stat.all",
+                    "l2_cache_req_stat.ic_dc_miss_in_l2",
                     "cache-references",
                     "cache-misses"
                 ],

@@ -218,10 +218,12 @@ class L1CacheMetric:
     Private L1 cache localization and data-miss trends.
     miss rate unit: %.
     """
-    total_accesses:     int
-    total_misses:       int
-    total_miss_rate:    float
-    l1_miss_rate_stats: MetricStats
+    totald_accesses:     int
+    totald_misses:       int
+    totali_accesses:     int
+    totali_misses:       int
+    l1d_miss_rate_stats: MetricStats
+    l1i_miss_rate_stats: MetricStats
 
 @dataclass
 class L2CacheMetric:

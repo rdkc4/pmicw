@@ -34,8 +34,9 @@ def compute_metrics(
 
     if "cpu" in selected_metrics:
         ipc_metric, task_clock_metric, branch_prediction_metric, system_metrics = compute_execution_core_metrics(perf_records["execution_core"])
-        l1_cache_metric, l2_cache_metric                                        = compute_private_cache_metrics(perf_records["private_caches"])
-        llc_cache_metric                                                        = compute_shared_cache_metrics(perf_records["shared_caches"])
+        l1_cache_metric                                                         = compute_l1_cache_metrics(perf_records["l1_caches"])
+        l2_cache_metric                                                         = compute_l2_cache_metrics(perf_records["l2_llc_caches"])
+        llc_cache_metric                                                        = compute_shared_cache_metrics(perf_records["l2_llc_caches"])
         startup_metrics                                                         = compute_startup_metrics(link_records, task_clock_metric.task_clock_stats.mean_value)
         
         cpu_metrics = CPUMetric(
@@ -113,20 +114,17 @@ def compute_branch_prediction_metrics(core_records: list[dict[str, float]]) -> B
         branch_miss_rate_stats  = branch_miss_rate_stats
     )
 
-def compute_private_cache_metrics(private_cache_records: list[dict[str, float]]) -> tuple[L1CacheMetric, L2CacheMetric]:
-    l1_cache_metrics = compute_l1_cache_metrics(private_cache_records)
-    l2_cache_metrics = compute_l2_cache_metrics(private_cache_records)
-
-    return l1_cache_metrics, l2_cache_metrics
-
 def compute_l1_cache_metrics(l1_records: list[dict[str, float]]) -> L1CacheMetric:
-    total_l1_misses, total_l1_accesses, l1_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-dcache-load-misses", "L1-dcache-loads")
-
+    total_l1d_misses, total_l1d_accesses, l1d_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-dcache-load-misses", "L1-dcache-loads")
+    total_l1i_misses, total_l1i_accesses, l1i_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-icache-load-misses", "L1-icache-loads")
+    
     return L1CacheMetric(
-        total_accesses     = int(total_l1_accesses),
-        total_misses       = int(total_l1_misses),
-        total_miss_rate    = (total_l1_misses / total_l1_accesses) if total_l1_accesses > 0 else 0.0,
-        l1_miss_rate_stats = l1_miss_rate_stats
+        totald_accesses     = int(total_l1d_accesses),
+        totald_misses       = int(total_l1d_misses),
+        totali_accesses     = int(total_l1i_accesses),
+        totali_misses       = int(total_l1i_misses),
+        l1d_miss_rate_stats = l1d_miss_rate_stats,
+        l1i_miss_rate_stats = l1i_miss_rate_stats
     )
 
 def compute_l2_cache_metrics(l2_records: list[dict[str, float]]) -> L2CacheMetric:
