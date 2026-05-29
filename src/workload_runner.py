@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Orchestration and Workload Execution Engine.
 
@@ -26,7 +27,7 @@ Error Isolation & Resource Guarantees:
       to spin down and cleanly joined, eliminating runaway background processes.
 
 Usage:
-    $ python3 ./workload_runner.py workload [workload-options] [options]
+    $ ./workload_runner.py workload [workload-options] [options]
 """
 import argparse
 from dataclasses import dataclass
