@@ -100,7 +100,6 @@ import uuid
 import psutil
 import cpuinfo
 import git
-import amdsmi
 
 class Version:
     """
@@ -187,6 +186,7 @@ class GPUInfo:
     def __init__(self):
         
         try:
+            import amdsmi
             amdsmi.amdsmi_init()
             devices = amdsmi.amdsmi_get_processor_handles()
 

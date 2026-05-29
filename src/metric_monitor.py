@@ -2,11 +2,14 @@ import subprocess
 import threading
 import time
 import psutil
-import amdsmi
 
 from record_parser import parse_rocm_smi_output
 
-def monitor_process_memory(proc: subprocess.Popen, psutil_proc: psutil.Process, interval: float) -> list[dict[str, float]]:
+def monitor_process_memory(
+    proc:        subprocess.Popen, 
+    psutil_proc: psutil.Process, 
+    interval:    float
+) -> list[dict[str, float]]:
     records: list[dict[str, float]] = []
 
     try:
@@ -33,9 +36,10 @@ def monitor_amd_gpu(
     device_index:   int = 0
 ):
     try:
+        import amdsmi
         amdsmi.amdsmi_init()
         processor_handles = amdsmi.amdsmi_get_processor_handles()
-        total_devices = len(processor_handles)
+        total_devices     = len(processor_handles)
         
         if device_index >= total_devices:
             print(f"Invalid GPU device index {device_index}. Total available devices: {total_devices}")
@@ -63,7 +67,13 @@ def monitor_amd_gpu(
             break
 
         try:
-            rocm_smi_result = subprocess.run(command, capture_output=True, text=True, check=True)
+            rocm_smi_result = subprocess.run(
+                command, 
+                capture_output = True, 
+                text           = True, 
+                check          = True
+            )
+
             record = parse_rocm_smi_output(rocm_smi_result.stdout.strip(), device_index)
             gpu_records.append(record)
 
