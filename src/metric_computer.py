@@ -37,7 +37,7 @@ def compute_metrics(
         l1_cache_metric                                                         = compute_l1_cache_metrics(perf_records["l1_caches"])
         l2_cache_metric                                                         = compute_l2_cache_metrics(perf_records["l2_llc_caches"])
         llc_cache_metric                                                        = compute_shared_cache_metrics(perf_records["l2_llc_caches"])
-        startup_metrics                                                         = compute_startup_metrics(link_records, task_clock_metric.task_clock_stats.mean_value)
+        startup_metrics                                                         = compute_startup_metrics(link_records, wall_time_metrics.wall_time_stats.mean_value)
         
         cpu_metrics = CPUMetric(
             ipc               = ipc_metric,
@@ -191,18 +191,18 @@ def compute_gpu_metrics(gpu_records: list[dict[str, float]]) -> GPUMetric:
         vram_stats     = compute_stats_metrics(vram)
     )
 
-def compute_startup_metrics(link_records: list[dict[str, float]], mean_task_clock: float) -> StartupMetric:
+def compute_startup_metrics(link_records: list[dict[str, float]], mean_wall_time: float) -> StartupMetric:
     link_cycles, cycles, cycle_ratio = compute_ratio_metrics(link_records, "ld", "cycles")
 
     return StartupMetric(
         total_cycles       = int(cycles),
         total_link_cycles  = int(link_cycles),
         startup_time_stats = MetricStats(
-            mean_value     = cycle_ratio.mean_value   * mean_task_clock,
-            median_value   = cycle_ratio.median_value * mean_task_clock,
-            stddev_value   = cycle_ratio.stddev_value * mean_task_clock,
-            min_value      = cycle_ratio.min_value    * mean_task_clock,
-            max_value      = cycle_ratio.max_value    * mean_task_clock
+            mean_value     = cycle_ratio.mean_value   * mean_wall_time,
+            median_value   = cycle_ratio.median_value * mean_wall_time,
+            stddev_value   = cycle_ratio.stddev_value * mean_wall_time,
+            min_value      = cycle_ratio.min_value    * mean_wall_time,
+            max_value      = cycle_ratio.max_value    * mean_wall_time
         )
     )
 
