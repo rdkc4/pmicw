@@ -65,7 +65,7 @@ def compute_metrics(
 
 def compute_wall_time_metric(wall_times: list[float]) -> WallTimeMetric:
     return WallTimeMetric(
-        total_ms           = sum(wall_times),
+        wall_time_total_ms = sum(wall_times),
         wall_time_stats_ms = compute_stats_metrics(wall_times)
     )
 
@@ -98,48 +98,48 @@ def compute_task_clock_metrics(core_records: list[dict[str, float]]) -> TaskCloc
             task_clock_values.append(task_clock_ms)
 
     return TaskClockMetric(
-        total_ms            = total_task_clock_ms,
+        task_clock_total_ms = total_task_clock_ms,
         task_clock_stats_ms = compute_stats_metrics(task_clock_values)
     )
 
 
 def compute_branch_prediction_metrics(core_records: list[dict[str, float]]) -> BranchPredictionMetric:
-    total_branch_misses, total_branches, branch_miss_rate_stats = compute_ratio_metrics(core_records, "branch-misses", "branches")
+    total_branch_miss, total_branch, branch_miss_rate_stats = compute_ratio_metrics(core_records, "branch-misses", "branches")
 
     return BranchPredictionMetric(
-        total_branches             = int(total_branches),
-        total_branch_misses        = int(total_branch_misses),
+        total_branches             = int(total_branch),
+        total_branch_misses        = int(total_branch_miss),
         branch_miss_rate_stats_pct = branch_miss_rate_stats
     )
 
 def compute_l1_cache_metrics(l1_records: list[dict[str, float]]) -> L1CacheMetric:
-    total_l1d_misses, total_l1d_accesses, l1d_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-dcache-load-misses", "L1-dcache-loads")
-    total_l1i_misses, total_l1i_accesses, l1i_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-icache-load-misses", "L1-icache-loads")
+    total_l1d_miss, total_l1d_access, l1d_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-dcache-load-misses", "L1-dcache-loads")
+    total_l1i_miss, total_l1i_access, l1i_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-icache-load-misses", "L1-icache-loads")
     
     return L1CacheMetric(
-        totald_accesses         = int(total_l1d_accesses),
-        totald_misses           = int(total_l1d_misses),
-        totali_accesses         = int(total_l1i_accesses),
-        totali_misses           = int(total_l1i_misses),
+        l1d_total_accesses      = int(total_l1d_access),
+        l1d_total_misses        = int(total_l1d_miss),
+        l1i_total_accesses      = int(total_l1i_access),
+        l1i_total_misses        = int(total_l1i_miss),
         l1d_miss_rate_stats_pct = l1d_miss_rate_stats,
         l1i_miss_rate_stats_pct = l1i_miss_rate_stats
     )
 
 def compute_l2_cache_metrics(l2_records: list[dict[str, float]]) -> L2CacheMetric:
-    total_l2_misses, total_l2_accesses, l2_miss_rate_stats = compute_ratio_metrics(l2_records, "l2_cache_req_stat.ic_dc_miss_in_l2", "l2_cache_req_stat.all")
+    total_l2_miss, total_l2_access, l2_miss_rate_stats = compute_ratio_metrics(l2_records, "l2_cache_req_stat.ic_dc_miss_in_l2", "l2_cache_req_stat.all")
 
     return L2CacheMetric(
-        total_accesses         = int(total_l2_accesses),
-        total_misses           = int(total_l2_misses),
+        l2_total_accesses      = int(total_l2_access),
+        l2_total_misses        = int(total_l2_miss),
         l2_miss_rate_stats_pct = l2_miss_rate_stats
     )
 
 def compute_shared_cache_metrics(shared_cache_records: list[dict[str, float]]) -> LLCacheMetric:
-    total_llc_misses, total_llc_accesses, llc_miss_rate_stats = compute_ratio_metrics(shared_cache_records, "cache-misses", "cache-references")
+    total_llc_miss, total_llc_access, llc_miss_rate_stats = compute_ratio_metrics(shared_cache_records, "cache-misses", "cache-references")
 
     return LLCacheMetric(
-        total_accesses          = int(total_llc_accesses),
-        total_misses            = int(total_llc_misses),
+        llc_total_accesses      = int(total_llc_access),
+        llc_total_misses        = int(total_llc_miss),
         llc_miss_rate_stats_pct = llc_miss_rate_stats
     )
 
@@ -188,11 +188,10 @@ def compute_gpu_metrics(gpu_records: list[dict[str, float]]) -> GPUMetric:
     )
 
 def compute_startup_metrics(link_records: list[dict[str, float]], mean_wall_time: float) -> StartupMetric:
-    link_cycles, cycles, cycle_ratio = compute_ratio_metrics(link_records, "ld", "cycles")
+    link_cycles, _, cycle_ratio = compute_ratio_metrics(link_records, "ld", "cycles")
 
     return StartupMetric(
-        total_cycles          = int(cycles),
-        total_link_cycles     = int(link_cycles),
+        linker_total_cycles   = int(link_cycles),
         startup_time_stats_ms = MetricStats(
             mean_value        = cycle_ratio.mean_value   * mean_wall_time,
             median_value      = cycle_ratio.median_value * mean_wall_time,
