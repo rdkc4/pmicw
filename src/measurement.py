@@ -8,18 +8,89 @@ Data Model Hierarchy Map:
     Measurement
     |-> Metadata
     |   |-> Version
+    |   |   |-> Git Repository URL
+    |   |   |-> Active Branch Name
+    |   |   |-> Current Commit Hash
+    |   |
     |   |-> SoftwareInfo
+    |   |   |-> OSInfo
+    |   |   |   |-> OS Name
+    |   |   |   |-> OS Version
+    |   |
     |   |-> HardwareInfo
+    |   |   |-> CPUInfo
+    |   |   |   |-> Model Name
+    |   |   |   |-> Architecture
+    |   |   |   |-> Physical Cores
+    |   |   |   |-> Logical Cores
+    |   |   |   |-> Max Frequency
     |
     |-> Workload
+    |   |-> Name
+    |   |-> Iterations
+    |   |-> Warmup Iterations
+    |   |-> Arguments
     |
     |-> Metrics
-        |-> WallTimeMetric
-        |-> CPUMetric
-        |-> GPUMetric
-        |-> MemoryMetric
-        |-> SystemMetric
-        |-> StartupMetric
+    |   |-> WallTimeMetric
+    |   |   |-> total_ms
+    |   |   |-> wall_time_stats_ms (mean, median, stddev, min, max)
+    |   |   
+    |   |-> CPUMetric
+    |   |   |-> IPCMetric
+    |   |   |   |-> total_instructions
+    |   |   |   |-> total_cycles
+    |   |   |   |-> ipc_stats (mean, median, stddev, min, max)
+    |   |   |
+    |   |   |-> TaskClockMetric
+    |   |   |   |-> total_ms
+    |   |   |   |-> task_clock_stats_ms (mean, median, stddev, min, max)
+    |   |   |   
+    |   |   |-> L1CacheMetric
+    |   |   |   |-> totald_accesses
+    |   |   |   |-> totald_misses
+    |   |   |   |-> totali_accesses
+    |   |   |   |-> totali_misses
+    |   |   |   |-> l1d_miss_rate_stats_pct (mean, median, stddev, min, max)
+    |   |   |   |-> l1i_miss_rate_stats_pct (mean, median, stddev, min, max)
+    |   |   |
+    |   |   |-> L2CacheMetric
+    |   |   |   |-> total_accesses
+    |   |   |   |-> total_misses
+    |   |   |   |-> l2_miss_rate_stats_pct (mean, median, stddev, min, max)
+    |   |   |
+    |   |   |-> LLCacheMetric
+    |   |   |   |-> total_accesses
+    |   |   |   |-> total_misses
+    |   |   |   |-> llc_miss_rate_stats_pct (mean, median, stddev, min, max)
+    |   |   |
+    |   |   |-> BranchPredictionMetric
+    |   |   |   |-> total_branches
+    |   |   |   |-> total_branch_misses
+    |   |   |   |-> branch_miss_rate_stats_pct (mean, median, stddev, min, max)
+    |   |
+    |   |-> GPUMetric
+    |   |   |-> activity_stats_pct (mean, median, stddev, min, max)
+    |   |   |-> vram_stats_pct (mean, median, stddev, min, max)
+    |   |
+    |   |-> MemoryMetric
+    |   |   |-> rss_stats_mb (mean, median, stddev, min, max)
+    |   |   |-> vms_stats_mb (mean, median, stddev, min, max)
+    |   |
+    |   |-> SystemMetric
+    |   |   |-> total_context_switches
+    |   |   |-> total_page_faults
+    |   |   |-> total_minor_faults
+    |   |   |-> total_major_faults
+    |   |   |-> context_switches_stats (mean, median, stddev, min, max)
+    |   |   |-> page_faults_stats (mean, median, stddev, min, max)
+    |   |   |-> minor_faults_stats (mean, median, stddev, min, max)
+    |   |   |-> major_faults_stats (mean, median, stddev, min, max)
+    |   |
+    |   |-> StartupMetric
+    |   |   |-> total_cycles
+    |   |   |-> total_link_cycles
+    |   |   |-> startup_time_stats_ms (mean, median, stddev, min, max)
 """
 
 from dataclasses import dataclass
@@ -49,6 +120,12 @@ class Version:
     
     def __repr__(self):
         return f"Version(repository='{self.repository}', branch='{self.branch}', commit='{self.commit}')"
+    
+    def to_csv_header(self) -> str:
+        return "repository,branch,commit"
+
+    def data_to_csv(self) -> str:
+        return f"{self.repository},{self.branch},{self.commit}"
 
 class OSInfo:
     """
@@ -60,6 +137,12 @@ class OSInfo:
 
     def __repr__(self):
         return f"OSInfo(name='{self.name}', version='{self.version}')"
+    
+    def to_csv_header(self) -> str:
+        return "os_name,os_version"
+    
+    def data_to_csv(self) -> str:
+        return f"{self.name},{self.version}"
 
 class SoftwareInfo:
     def __init__(self):
@@ -67,6 +150,12 @@ class SoftwareInfo:
 
     def __repr__(self):
         return f"SoftwareInfo(os={self.os})"
+    
+    def to_csv_header(self) -> str:
+        return self.os.to_csv_header()
+    
+    def data_to_csv(self) -> str:
+        return self.os.data_to_csv()
 
 class CPUInfo:
     """
@@ -83,6 +172,12 @@ class CPUInfo:
 
     def __repr__(self):
         return f"CPUInfo(model='{self.model}', architecture='{self.architecture}', physical_cores={self.physical_cores}, logical_cores={self.logical_cores}, frequency={self.frequency})"
+
+    def to_csv_header(self) -> str:
+        return "cpu_model,cpu_architecture,physical_cores,logical_cores,cpu_frequency"
+
+    def data_to_csv(self) -> str:
+        return f"{self.model},{self.architecture},{self.physical_cores},{self.logical_cores},{self.frequency}"
 
 class GPUInfo:
     """
@@ -123,6 +218,12 @@ class GPUInfo:
     def __repr__(self):
         return f"GPUInfo(model='{self.model}', target='{self.target}', vram_total_mb='{self.vram_total_mb}', vram_used_mb='{self.vram_used_mb}')"
 
+    def to_csv_header(self) -> str:
+        return "gpu_model,gpu_target,vram_total_mb,vram_used_mb"
+
+    def data_to_csv(self) -> str:
+        return f"{self.model},{self.target},{self.vram_total_mb},{self.vram_used_mb}"
+
 class MemoryInfo:
     """
     Extracts underlying memory data using `psutil`
@@ -141,6 +242,12 @@ class MemoryInfo:
     def __repr__(self):
         return f"MemoryInfo(total_mb={self.total_mb}, available_mb={self.available_mb}, used_mb={self.used_mb}, free_mb={self.free_mb}, swap_total_mb={self.swap_total_mb}, swap_used_mb={self.swap_used_mb}, swap_free_mb={self.swap_free_mb})"
 
+    def to_csv_header(self) -> str:
+        return "total_mb,available_mb,used_mb,free_mb,swap_total_mb,swap_used_mb,swap_free_mb"
+
+    def data_to_csv(self) -> str:
+        return f"{self.total_mb},{self.available_mb},{self.used_mb},{self.free_mb},{self.swap_total_mb},{self.swap_used_mb},{self.swap_free_mb}"
+
 class HardwareInfo:
     def __init__(self):
         self.cpu    = CPUInfo()
@@ -149,6 +256,12 @@ class HardwareInfo:
 
     def __repr__(self):
         return f"HardwareInfo(cpu={self.cpu}, gpu={self.gpu}, memory={self.memory})"
+    
+    def to_csv_header(self) -> str:
+        return f"{self.cpu.to_csv_header()},{self.gpu.to_csv_header()},{self.memory.to_csv_header()}"
+    
+    def data_to_csv(self) -> str:
+        return f"{self.cpu.data_to_csv()},{self.gpu.data_to_csv()},{self.memory.data_to_csv()}"
 
 class Metadata:
     def __init__(self):
@@ -161,6 +274,12 @@ class Metadata:
     def __repr__(self):
         return f"Metadata(run_id='{self.run_id}', timestamp='{self.timestamp}', version={self.version}, software={self.software}, hardware={self.hardware})"
 
+    def to_csv_header(self) -> str:
+        return f"run_id,timestamp,{self.version.to_csv_header()},{self.software.to_csv_header()},{self.hardware.to_csv_header()}"
+    
+    def data_to_csv(self) -> str:
+        return f"{self.run_id},{self.timestamp},{self.version.data_to_csv()},{self.software.data_to_csv()},{self.hardware.data_to_csv()}"
+
 @dataclass
 class Workload:
     """
@@ -171,6 +290,13 @@ class Workload:
     warmup_iterations: int
     arguments:         list[str] 
 
+    def to_csv_header(self) -> str:
+        return "workload_name,iterations,warmup_iterations,arguments"
+    
+    def data_to_csv(self) -> str:
+        args_str = " ".join(self.arguments)
+        return f"{self.name},{self.iterations},{self.warmup_iterations},\"{args_str}\""
+
 @dataclass
 class MetricStats:
     """Core statistical results calculated over multiple workload iteration samples."""
@@ -179,6 +305,12 @@ class MetricStats:
     stddev_value: float
     min_value:    float
     max_value:    float
+
+    def to_csv_header(self, prefix: str) -> str:
+        return f"{prefix}_mean,{prefix}_median,{prefix}_stddev,{prefix}_min,{prefix}_max"
+
+    def data_to_csv(self) -> str:
+        return f"{self.mean_value},{self.median_value},{self.stddev_value},{self.min_value},{self.max_value}"
 
 @dataclass
 class WallTimeMetric:
@@ -190,6 +322,12 @@ class WallTimeMetric:
     total_ms:           float
     wall_time_stats_ms: MetricStats
 
+    def to_csv_header(self) -> str:
+        return f"wall_time_total_ms,{self.wall_time_stats_ms.to_csv_header("wall_time")}"
+    
+    def data_to_csv(self) -> str:
+        return f"{self.total_ms},{self.wall_time_stats_ms.data_to_csv()}"
+
 @dataclass
 class IPCMetric:
     """
@@ -200,6 +338,12 @@ class IPCMetric:
     total_cycles:       int
     ipc_stats:          MetricStats
 
+    def to_csv_header(self) -> str:
+        return f"total_instructions,total_cycles,{self.ipc_stats.to_csv_header("ipc")}"
+    
+    def data_to_csv(self) -> str:
+        return f"{self.total_instructions},{self.total_cycles},{self.ipc_stats.data_to_csv()}"
+
 @dataclass
 class TaskClockMetric:
     """
@@ -208,6 +352,12 @@ class TaskClockMetric:
     """
     total_ms:            float
     task_clock_stats_ms: MetricStats
+
+    def to_csv_header(self) -> str:
+        return f"task_clock_total_ms,{self.task_clock_stats_ms.to_csv_header("task_clock")}"
+
+    def data_to_csv(self) -> str:
+        return f"{self.total_ms},{self.task_clock_stats_ms.data_to_csv()}"
 
 @dataclass
 class L1CacheMetric:
@@ -222,6 +372,12 @@ class L1CacheMetric:
     l1d_miss_rate_stats_pct: MetricStats
     l1i_miss_rate_stats_pct: MetricStats
 
+    def to_csv_header(self) -> str:
+        return f"l1_totald_accesses,l1_totald_misses,l1_totali_accesses,l1_totali_misses,{self.l1d_miss_rate_stats_pct.to_csv_header('l1d_miss_rate')},{self.l1i_miss_rate_stats_pct.to_csv_header('l1i_miss_rate')}"
+
+    def data_to_csv(self) -> str:
+        return f"{self.totald_accesses},{self.totald_misses},{self.totali_accesses},{self.totali_misses},{self.l1d_miss_rate_stats_pct.data_to_csv()},{self.l1i_miss_rate_stats_pct.data_to_csv()}"
+
 @dataclass
 class L2CacheMetric:
     """
@@ -231,6 +387,12 @@ class L2CacheMetric:
     total_accesses:         int
     total_misses:           int
     l2_miss_rate_stats_pct: MetricStats
+
+    def to_csv_header(self) -> str:
+        return f"l2_total_accesses,l2_total_misses,{self.l2_miss_rate_stats_pct.to_csv_header('l2_miss_rate')}"
+
+    def data_to_csv(self) -> str:
+        return f"{self.total_accesses},{self.total_misses},{self.l2_miss_rate_stats_pct.data_to_csv()}"
 
 @dataclass
 class LLCacheMetric:
@@ -242,6 +404,12 @@ class LLCacheMetric:
     total_misses:            int
     llc_miss_rate_stats_pct: MetricStats
 
+    def to_csv_header(self) -> str:
+        return f"llc_total_accesses,llc_total_misses,{self.llc_miss_rate_stats_pct.to_csv_header('llc_miss_rate')}"
+
+    def data_to_csv(self) -> str:
+        return f"{self.total_accesses},{self.total_misses},{self.llc_miss_rate_stats_pct.data_to_csv()}"
+
 @dataclass
 class BranchPredictionMetric:
     """
@@ -250,6 +418,12 @@ class BranchPredictionMetric:
     total_branches:             int
     total_branch_misses:        int
     branch_miss_rate_stats_pct: MetricStats
+
+    def to_csv_header(self) -> str:
+        return f"total_branches,total_branch_misses,{self.branch_miss_rate_stats_pct.to_csv_header('branch_miss_rate')}"
+
+    def data_to_csv(self) -> str:
+        return f"{self.total_branches},{self.total_branch_misses},{self.branch_miss_rate_stats_pct.data_to_csv()}"
 
 @dataclass
 class CPUMetric:
@@ -264,6 +438,12 @@ class CPUMetric:
     llc_cache:         LLCacheMetric
     branch_prediction: BranchPredictionMetric
 
+    def to_csv_header(self) -> str:
+        return f"{self.ipc.to_csv_header()},{self.task_clock.to_csv_header()},{self.l1_cache.to_csv_header()},{self.l2_cache.to_csv_header()},{self.llc_cache.to_csv_header()},{self.branch_prediction.to_csv_header()}"
+
+    def data_to_csv(self) -> str:
+        return f"{self.ipc.data_to_csv()},{self.task_clock.data_to_csv()},{self.l1_cache.data_to_csv()},{self.l2_cache.data_to_csv()},{self.llc_cache.data_to_csv()},{self.branch_prediction.data_to_csv()}"
+
 @dataclass
 class GPUMetric:
     """
@@ -273,6 +453,12 @@ class GPUMetric:
     activity_stats_pct: MetricStats
     vram_stats_pct:     MetricStats
 
+    def to_csv_header(self) -> str:
+        return f"{self.activity_stats_pct.to_csv_header('gpu_activity_pct')},{self.vram_stats_pct.to_csv_header('gpu_vram_pct')}"
+
+    def data_to_csv(self) -> str:
+        return f"{self.activity_stats_pct.data_to_csv()},{self.vram_stats_pct.data_to_csv()}"
+
 @dataclass
 class MemoryMetric:
     """
@@ -281,6 +467,12 @@ class MemoryMetric:
     """
     rss_stats_mb: MetricStats
     vms_stats_mb: MetricStats
+
+    def to_csv_header(self) -> str:
+        return f"{self.rss_stats_mb.to_csv_header('rss_mb')},{self.vms_stats_mb.to_csv_header('vms_mb')}"
+
+    def data_to_csv(self) -> str:
+        return f"{self.rss_stats_mb.data_to_csv()},{self.vms_stats_mb.data_to_csv()}"
 
 @dataclass
 class SystemMetric:
@@ -301,6 +493,12 @@ class SystemMetric:
     minor_faults_stats:     MetricStats
     major_faults_stats:     MetricStats
 
+    def to_csv_header(self) -> str:
+        return f"total_context_switches,total_page_faults,total_minor_faults,total_major_faults,{self.context_switches_stats.to_csv_header('context_switches')},{self.page_faults_stats.to_csv_header('page_faults')},{self.minor_faults_stats.to_csv_header('minor_faults')},{self.major_faults_stats.to_csv_header('major_faults')}"
+
+    def data_to_csv(self) -> str:
+        return f"{self.total_context_switches},{self.total_page_faults},{self.total_minor_faults},{self.total_major_faults},{self.context_switches_stats.data_to_csv()},{self.page_faults_stats.data_to_csv()},{self.minor_faults_stats.data_to_csv()},{self.major_faults_stats.data_to_csv()}"
+
 @dataclass
 class StartupMetric:
     """
@@ -312,6 +510,12 @@ class StartupMetric:
     total_link_cycles:     int
     startup_time_stats_ms: MetricStats
 
+    def to_csv_header(self) -> str:
+        return f"startup_total_cycles,startup_total_link_cycles,{self.startup_time_stats_ms.to_csv_header('startup_time_ms')}"
+
+    def data_to_csv(self) -> str:
+        return f"{self.total_cycles},{self.total_link_cycles},{self.startup_time_stats_ms.data_to_csv()}"
+
 @dataclass
 class Metrics:
     """The unified mathematical metric encompassing all active profiling vectors."""
@@ -321,6 +525,24 @@ class Metrics:
     memory:    MemoryMetric  | None
     system:    SystemMetric  | None
     startup:   StartupMetric | None
+
+    def to_csv_header(self) -> str:
+        headers = [self.wall_time.to_csv_header()]
+        if self.cpu:     headers.append(self.cpu.to_csv_header())
+        if self.gpu:     headers.append(self.gpu.to_csv_header())
+        if self.memory:  headers.append(self.memory.to_csv_header())
+        if self.system:  headers.append(self.system.to_csv_header())
+        if self.startup: headers.append(self.startup.to_csv_header())
+        return ",".join(headers)
+
+    def data_to_csv(self) -> str:
+        data = [self.wall_time.data_to_csv()]
+        if self.cpu:     data.append(self.cpu.data_to_csv())
+        if self.gpu:     data.append(self.gpu.data_to_csv())
+        if self.memory:  data.append(self.memory.data_to_csv())
+        if self.system:  data.append(self.system.data_to_csv())
+        if self.startup: data.append(self.startup.data_to_csv())
+        return ",".join(data)
 
 class Measurement:
     """
@@ -335,3 +557,14 @@ class Measurement:
     
     def __repr__(self):
         return f"Measurement(metadata={self.metadata}, workload={self.workload}, metrics={self.metrics})"
+
+    def to_csv_header(self) -> str:
+        return f"{self.metadata.to_csv_header()},{self.workload.to_csv_header()},{self.metrics.to_csv_header()}"
+
+    def to_csv(self, show_header: bool) -> str:
+        data = f"{self.metadata.data_to_csv()},{self.workload.data_to_csv()},{self.metrics.data_to_csv()}"
+        
+        if show_header:
+            return f"{self.to_csv_header()}\n{data}"
+        
+        return data
