@@ -187,8 +187,8 @@ class WallTimeMetric:
     total_ms represents the baseline accumulation across iterations.
     wall_time_stats unit: ms
     """
-    total_ms:        float
-    wall_time_stats: MetricStats
+    total_ms:           float
+    wall_time_stats_ms: MetricStats
 
 @dataclass
 class IPCMetric:
@@ -198,7 +198,6 @@ class IPCMetric:
     """
     total_instructions: int
     total_cycles:       int
-    total_ipc:          float
     ipc_stats:          MetricStats
 
 @dataclass
@@ -207,8 +206,8 @@ class TaskClockMetric:
     CPU time consumed by the profiled task, measured via perf task-clock events.
     total_ms represents the accumulated task-clock time across all iterations.
     """
-    total_ms:         float
-    task_clock_stats: MetricStats
+    total_ms:            float
+    task_clock_stats_ms: MetricStats
 
 @dataclass
 class L1CacheMetric:
@@ -216,12 +215,12 @@ class L1CacheMetric:
     Private L1 cache localization and data-miss trends.
     miss rate unit: %.
     """
-    totald_accesses:     int
-    totald_misses:       int
-    totali_accesses:     int
-    totali_misses:       int
-    l1d_miss_rate_stats: MetricStats
-    l1i_miss_rate_stats: MetricStats
+    totald_accesses:         int
+    totald_misses:           int
+    totali_accesses:         int
+    totali_misses:           int
+    l1d_miss_rate_stats_pct: MetricStats
+    l1i_miss_rate_stats_pct: MetricStats
 
 @dataclass
 class L2CacheMetric:
@@ -229,10 +228,9 @@ class L2CacheMetric:
     Private L2 cache localization and data-miss trends.
     miss rate unit: %
     """
-    total_accesses:     int
-    total_misses:       int
-    total_miss_rate:    float
-    l2_miss_rate_stats: MetricStats
+    total_accesses:         int
+    total_misses:           int
+    l2_miss_rate_stats_pct: MetricStats
 
 @dataclass
 class LLCacheMetric:
@@ -240,20 +238,18 @@ class LLCacheMetric:
     Last Level Cache (Shared LLC/L3 Cache) system performance footprints.
     miss rate unit: %
     """
-    total_accesses:      int
-    total_misses:        int
-    total_miss_rate:     float
-    llc_miss_rate_stats: MetricStats
+    total_accesses:          int
+    total_misses:            int
+    llc_miss_rate_stats_pct: MetricStats
 
 @dataclass
 class BranchPredictionMetric:
     """
     Tracks total conditional branches evaluated versus pipeline speculative mispredictions.
     """
-    total_branches:          int
-    total_branch_misses:     int
-    total_branch_miss_rate:  float
-    branch_miss_rate_stats:  MetricStats
+    total_branches:             int
+    total_branch_misses:        int
+    branch_miss_rate_stats_pct: MetricStats
 
 @dataclass
 class CPUMetric:
@@ -274,8 +270,8 @@ class GPUMetric:
     Accelerated graphics compute block tracked via subprocess background loops using `rocm-smi`.
     Activity and VRAM units: %.
     """
-    activity_stats: MetricStats
-    vram_stats:     MetricStats
+    activity_stats_pct: MetricStats
+    vram_stats_pct:     MetricStats
 
 @dataclass
 class MemoryMetric:
@@ -283,8 +279,8 @@ class MemoryMetric:
     Host volatile workspace allocations sampled via psutil tracking threads.
     rss and vms units: mb
     """
-    rss_stats: MetricStats
-    vms_stats: MetricStats
+    rss_stats_mb: MetricStats
+    vms_stats_mb: MetricStats
 
 @dataclass
 class SystemMetric:
@@ -312,9 +308,9 @@ class StartupMetric:
     Startup time stats represent mean, median, stddev, min, max startup time
     startup_time_stats unit: ms
     """
-    total_cycles:       int
-    total_link_cycles:  int
-    startup_time_stats: MetricStats
+    total_cycles:          int
+    total_link_cycles:     int
+    startup_time_stats_ms: MetricStats
 
 @dataclass
 class Metrics:
