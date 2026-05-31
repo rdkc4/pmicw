@@ -351,7 +351,7 @@ class Workload:
         return "workload_name,workload_iterations,workload_warmup_iterations,workload_arguments"
     
     def data_to_csv(self) -> str:
-        args_str = " ".join(self.arguments)
+        args_str = " ".join(self.arguments or [])
         return f"{self.name},{self.iterations},{self.warmup_iterations},\"{args_str}\""
 
 @dataclass
