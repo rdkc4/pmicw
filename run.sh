@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
-    echo "Usage: $0 <workload-runner-path> workload [workload-options] [options]"
+    echo "Usage: $0 <workload-runner-path> [options] <workload> [workload-args...]"
     exit 1
 fi
 
@@ -31,10 +31,9 @@ sudo bash "$PRE" "$STATE_FILE"
 
 # run workload
 RUNNER="$1"
-WORKLOAD="$2"
-shift 2
+shift
 
-COMMAND=("$RUNNER" "$WORKLOAD" "$@")
+COMMAND=("$RUNNER" "$@")
 
 if command -v numactl &>/dev/null; then
     numactl --cpunodebind=0 --membind=0 "${COMMAND[@]}"

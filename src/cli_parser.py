@@ -4,29 +4,29 @@ CLI Parsing Module for the Workload Profiler.
 This module exposes the command-line interface structure using `argparse`.
 
 Expected Syntax:
-    <workload> [workload-options] [options]
+    [options] <workload> [workload-args]
 
 Core Structural Rules:
  - [positional]:
     - `workload` is a mandatory positional argument
- 
- - [workload-options]:
-    - `-args`, `--arguments` - list of arguments for the workload separated by space
-                             - usage: [--arguments <argument-1> <argument-2> ... <argument-n>]
-
-    - `-it`, `--iteration` - number of iterations workload should run
-                           - default: 1
-                           - usage: [--iteration <n>], where n > 0
+    
+    - `workload-args` is an optional positional argument 
+                      captures all remaining arguments after the workload, 
+                      allowing for flexible argument passing to the workload command
+    
+ - [options]
+    - `-m`, `--metric` - list of metrics separated by comma
+                       - options: wall-time, cpu, gpu, memory
+                       - default: wall-time (always included)
+                       - usage: [--metric wall-time,cpu,gpu,memory]
 
     - `-wit`, `--warmup-iteration` - number of warmup iterations workload should run
                                    - default: 0
                                    - usage: [--warmup-iteration <n>], where n > 0 
-    
- - [options]
-    - `-m`, `--metric` - list of metrics separated by space
-                       - options: wall-time, cpu, gpu, memory
-                       - default: wall-time (always included)
-                       - usage: [--metric wall-time cpu gpu memory]
+                                   
+    - `-it`, `--iteration` - number of iterations workload should run
+                           - default: 1
+                           - usage: [--iteration <n>], where n > 0
 
     - `-cmp`, `--compare` - compare current results with n previous results
                           - usage: [--compare <n>], where n > 0
@@ -37,17 +37,17 @@ Core Structural Rules:
     - `-cmpw`, `--compare-with` - compare current version with a specific version
                                 - usage: [--compare-with <version>]
 
-    - `-rfmt`, `--report-format` - list of report formats separated by space 
+    - `-rfmt`, `--report-format` - list of report formats separated by comma 
                                  - format in which comparison data should be reported
                                  - options: csv, json, html 
                                  - default: csv
-                                 - usage: [--report-format csv json html]
+                                 - usage: [--report-format csv,json,html]
 
-    - `-vfmt`, `--visual-format` - list of visual formats separated by space
+    - `-vfmt`, `--visual-format` - list of visual formats separated by comma
                                  - format in which the comparison data should be displayed
                                  - options: table, chart, graph
                                  - default: graph
-                                 - usage [--visual-format table chart graph]
+                                 - usage [--visual-format table,chart,graph]
     
     - `-help`, `--help` - shows help message and exits
 """
@@ -61,41 +61,25 @@ def parse_args() -> argparse.Namespace:
 def create_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         'cli-parser', 
-        usage    = '%(prog)s workload [workload-options] [options]', 
+        usage    = '%(prog)s [options] <workload> [workload-args...]', 
         add_help = False
     )
 
+    add_options(parser)
+    add_workload_args(parser)
+
+    return parser
+
+def add_workload_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         'workload', 
         help = 'the command or script to execute as the workload'
     )
 
-    add_workload_options(parser)
-    add_options(parser)
-
-    return parser
-
-def add_workload_options(parser: argparse.ArgumentParser) -> None:
-    workload_options = parser.add_argument_group('workload-options')
-
-    workload_options.add_argument(
-        '-args', '--arguments', 
-        nargs = '*', 
-        help  = 'arguments for the workload separated by space'
-    )
-
-    workload_options.add_argument(
-        '-it', '--iteration',
-        type    = positive_int,
-        default = 1,
-        help    = 'define the number of iterations to run the workload (default: 1)'
-    )
-
-    workload_options.add_argument(
-        '-wit', '--warmup-iteration',
-        type    = positive_int,
-        default = 0,
-        help    = 'define the number of iterations to run the warmup for the workload (default: 0)'
+    parser.add_argument(
+        'workload_args', 
+        nargs   = argparse.REMAINDER,
+        help    = 'arguments for the workload separated by space'
     )
 
 def add_options(parser: argparse.ArgumentParser) -> None:
@@ -103,15 +87,28 @@ def add_options(parser: argparse.ArgumentParser) -> None:
 
     options.add_argument(
         '-m', '--metric',
-        nargs   = '*',
-        default = ['wall-time'],
-        choices = ['wall-time', 'cpu', 'gpu', 'memory'],
-        help    = 'metrics to collect separated by space (default: wall-time)'
+        type    = parse_metrics,
+        default = ['wall-time'], # options: wall-time, cpu, gpu, memory
+        help    = 'metrics to collect separated by comma (default: wall-time)'
+    )
+
+    options.add_argument(
+        '-wit', '--warmup-iteration',
+        type    = parse_positive_int,
+        default = 0,
+        help    = 'define the number of iterations to run the warmup for the workload (default: 0)'
+    )
+
+    options.add_argument(
+        '-it', '--iteration',
+        type    = parse_positive_int,
+        default = 1,
+        help    = 'define the number of iterations to run the workload (default: 1)'
     )
 
     options.add_argument(
         '-cmp', '--compare',
-        type = positive_int,
+        type = parse_positive_int,
         help = 'compare with a specific number of previous runs'
     )
 
@@ -129,18 +126,16 @@ def add_options(parser: argparse.ArgumentParser) -> None:
 
     options.add_argument(
         '-rfmt', '--report-format',
-        nargs   = '*',
-        default = ['csv'],
-        choices = ['json', 'csv', 'html'],
-        help    = 'report formats separated by space (default: csv)'
+        type    = parse_report_formats,
+        default = ['csv'], # options: csv, json, html
+        help    = 'report formats separated by comma (default: csv)'
     )
 
     options.add_argument(
         '-vfmt', '--visual-format',
-        nargs   = '*',
-        default = ['graph'],
-        choices = ['table', 'chart', 'graph'],
-        help    = 'visualization formats separated by space (default: graph)'
+        type    = parse_visual_formats,
+        default = ['graph'], # options: table, chart, graph
+        help    = 'visualization formats separated by comma (default: graph)'
     )
 
     options.add_argument(
@@ -149,7 +144,43 @@ def add_options(parser: argparse.ArgumentParser) -> None:
         help   = 'show this help message and exit'
     )
 
-def positive_int(value: str) -> int:
+def parse_metrics(metrics_str: str) -> list[str]:
+    valid   = {'wall-time', 'cpu', 'gpu', 'memory'}
+    metrics = [m.strip() for m in metrics_str.split(',')]
+
+    invalid = set(metrics) - valid
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            f'invalid metrics: {", ".join(sorted(invalid))}'
+        )
+
+    return metrics
+
+def parse_report_formats(formats_str: str) -> list[str]:
+    valid   = {'csv', 'json', 'html'}
+    formats = [f.strip() for f in formats_str.split(',')]
+
+    invalid = set(formats) - valid
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            f'invalid report formats: {", ".join(sorted(invalid))}'
+        )
+
+    return formats
+
+def parse_visual_formats(formats_str: str) -> list[str]:
+    valid   = {'table', 'chart', 'graph'}
+    formats = [f.strip() for f in formats_str.split(',')]
+
+    invalid = set(formats) - valid
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            f'invalid visual formats: {", ".join(sorted(invalid))}'
+        )
+
+    return formats
+
+def parse_positive_int(value: str) -> int:
     try:
         ivalue = int(value)
     except ValueError:

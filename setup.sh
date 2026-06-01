@@ -50,6 +50,6 @@ echo "Setup [6/6]: Setup complete"
 echo
 echo "To run a workload, use:"
 echo "  $ source .venv/bin/activate"
-echo "  $ ./run.sh <workload-runner-path> <workload> [workload-options] [options]"
+echo "  $ ./run.sh <workload-runner-path> [options] <workload> [workload-args...]"
 echo
-echo "  Example: $ ./run.sh ./src/workload_runner.py workload -args arg1 -m cpu gpu memory"
+echo "  Example: $ ./run.sh ./src/workload_runner.py -m cpu,gpu,memory workload arg1 arg2"

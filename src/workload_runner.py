@@ -27,11 +27,12 @@ Error Isolation & Resource Guarantees:
       to spin down and cleanly joined, eliminating runaway background processes.
 
 Usage:
-    $ ./workload_runner.py workload [workload-options] [options]
+    $ ./workload_runner.py [options] <workload> [workload-args...]
 """
 import argparse
 from dataclasses import dataclass
 import subprocess
+import sys
 import threading
 import time
 import os
@@ -175,6 +176,12 @@ def execute_workload(
 
         _, stderr = proc.communicate()
 
+        if proc.returncode != 0:
+            ctx.monitors.activity_event.clear()
+            raise RuntimeError(
+                f"Workload '{" ".join(command)}' failed with exit code {proc.returncode}.\n"
+            )
+
         ctx.monitors.activity_event.clear()
         wall_times.append((time.perf_counter() - start) * 1000)
         
@@ -257,7 +264,7 @@ def setup_workload_context(args: argparse.Namespace):
         iterations        = args.iteration,
         warmup_iterations = args.warmup_iteration,
         selected_metrics  = args.metric,
-        command           = [args.workload] + (args.arguments or []),
+        command           = [args.workload] + (args.workload_args or []),
         env               = env,
         records           = records,
         monitors          = monitors
@@ -268,21 +275,27 @@ def assemble_workload(args: argparse.Namespace) -> Workload:
         name              = args.workload,
         iterations        = args.iteration,
         warmup_iterations = args.warmup_iteration,
-        arguments         = args.arguments
+        arguments         = args.workload_args or []
     )
 
 def assemble_measurement(workload: Workload, metrics: Metrics) -> Measurement:
     return Measurement(
-        metadata  = Metadata(),
+        metadata = Metadata(),
         workload = workload,
         metrics  = metrics
     )
 
 def main():
-    args        = parse_args()
-    ctx         = setup_workload_context(args)
-    workload    = assemble_workload(args)
-    metrics     = run_workload(ctx)
+    args     = parse_args()
+    ctx      = setup_workload_context(args)
+    workload = assemble_workload(args)
+
+    try:
+        metrics = run_workload(ctx)
+    except RuntimeError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
     measurement = assemble_measurement(workload, metrics)
     write(measurement)
 
