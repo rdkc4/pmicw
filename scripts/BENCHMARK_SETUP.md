@@ -77,9 +77,9 @@ sudo ./benchmark_setup.sh --apply
 ./benchmark_setup.sh --info-only
 ```
 
-4) Running The Workload
+4) Running The Benchmark
 ```bash
-numactl --cpunodebind=0 --membind=0 ./workload
+numactl --cpunodebind=0 --membind=0 -- ./benchmark
 ```
 
 5) Resetting System After Benchmark

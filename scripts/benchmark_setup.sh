@@ -168,7 +168,7 @@ apply() {
     fi
 
     echo   
-    echo "Configuration applied successfully! Run your benchmark using:"
+    echo "Configuration applied successfully. Run your benchmark using:"
     echo "numactl --cpunodebind=0 --membind=0 -- ./benchmark"
 }
 
@@ -235,3 +235,6 @@ case "$1" in
         exit 1
         ;;
 esac
+
+# Running the benchmark: 
+# $ numactl --cpunodebind=0 --membind=0 -- ./benchmark
