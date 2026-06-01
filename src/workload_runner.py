@@ -43,6 +43,7 @@ from measurement import Measurement, Metadata, Metrics, Workload
 from metric_computer import compute_metrics
 from metric_monitor import monitor_amd_gpu, monitor_process_memory
 from record_parser import parse_cpu_prof_output
+from csv_writer import write
 
 @dataclass
 class WorkloadRecords:
@@ -283,8 +284,7 @@ def main():
     workload    = assemble_workload(args)
     metrics     = run_workload(ctx)
     measurement = assemble_measurement(workload, metrics)
-    print(measurement)
-
+    write(measurement)
 
 if __name__ == "__main__":
     main()
