@@ -39,9 +39,9 @@ Core Structural Rules:
 
     - `-rfmt`, `--report-format` - list of report formats separated by comma 
                                  - format in which comparison data should be reported
-                                 - options: csv, json, html 
+                                 - options: csv, json, md 
                                  - default: csv
-                                 - usage: [--report-format csv,json,html]
+                                 - usage: [--report-format csv,json,md]
 
     - `-vfmt`, `--visual-format` - list of visual formats separated by comma
                                  - format in which the comparison data should be displayed
@@ -127,7 +127,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     options.add_argument(
         '-rfmt', '--report-format',
         type    = parse_report_formats,
-        default = ['csv'], # options: csv, json, html
+        default = ['csv'], # options: csv, json, md
         help    = 'report formats separated by comma (default: csv)'
     )
 
@@ -157,7 +157,7 @@ def parse_metrics(metrics_str: str) -> list[str]:
     return metrics
 
 def parse_report_formats(formats_str: str) -> list[str]:
-    valid   = {'csv', 'json', 'html'}
+    valid   = {'csv', 'json', 'md'}
     formats = [f.strip() for f in formats_str.split(',')]
 
     invalid = set(formats) - valid
