@@ -11,33 +11,34 @@ from measurement import (
     Metrics,
     StartupMetric,
     SystemMetric,
-    TaskClockMetric, 
+    TaskClockMetric,
+    ThreadMetric, 
     WallTimeMetric
 )
 from statistics import mean, median, stdev
 from collections import defaultdict
 
 def compute_metrics(
-    selected_metrics: list[str], 
-    wall_times:       list[float],
-    perf_records:     dict[str, list[dict[str, float]]], 
-    memory_records:   list[dict[str, float]], 
-    gpu_records:      list[dict[str, float]],
-    link_records:     list[dict[str, float]]
+    wall_times:     list[float],
+    perf_records:   dict[str, list[dict[str, float]]], 
+    memory_records: list[dict[str, float]], 
+    gpu_records:    list[dict[str, float]],
+    link_records:   list[dict[str, float]],
+    thread_records: list[float]
 ) -> Metrics:
     cpu_metrics       = None
     system_metrics    = None
     memory_metrics    = None
     gpu_metrics       = None
     startup_metrics   = None
+    thread_metrics    = None
     wall_time_metrics = compute_wall_time_metric(wall_times)
 
-    if "cpu" in selected_metrics:
+    if perf_records:
         ipc_metric, task_clock_metric, branch_prediction_metric, system_metrics = compute_execution_core_metrics(perf_records["execution_core"])
         l1_cache_metric                                                         = compute_l1_cache_metrics(perf_records["l1_caches"])
         l2_cache_metric                                                         = compute_l2_cache_metrics(perf_records["l2_llc_caches"])
         llc_cache_metric                                                        = compute_shared_cache_metrics(perf_records["l2_llc_caches"])
-        startup_metrics                                                         = compute_startup_metrics(link_records, wall_time_metrics.wall_time_stats_ms.mean_value)
         
         cpu_metrics = CPUMetric(
             ipc               = ipc_metric,
@@ -48,11 +49,22 @@ def compute_metrics(
             branch_prediction = branch_prediction_metric,
         )
 
-    if "memory" in selected_metrics:
+    if link_records:
+        startup_metrics = compute_startup_metrics(link_records, wall_time_metrics.wall_time_stats_ms.mean_value)
+
+    if memory_records:
         memory_metrics = compute_memory_metrics(memory_records)
     
-    if "gpu" in selected_metrics:
+    if gpu_records:
         gpu_metrics = compute_gpu_metrics(gpu_records)
+
+    if thread_records:
+        thread_metrics = compute_thread_metrics(
+            thread_records, 
+            wall_time_metrics.wall_time_stats_ms.mean_value, 
+            cpu_metrics.task_clock.task_clock_stats_ms.mean_value if cpu_metrics else 0.0,
+            system_metrics
+        )
 
     return Metrics(
         wall_time = wall_time_metrics,
@@ -60,7 +72,8 @@ def compute_metrics(
         gpu       = gpu_metrics,
         memory    = memory_metrics,
         system    = system_metrics,
-        startup   = startup_metrics
+        startup   = startup_metrics,
+        thread    = thread_metrics
     )
 
 def compute_wall_time_metric(wall_times: list[float]) -> WallTimeMetric:
@@ -201,6 +214,27 @@ def compute_startup_metrics(link_records: list[dict[str, float]], mean_wall_time
         )
     )
 
+def compute_thread_metrics(
+    thread_records:  list[float], 
+    mean_wall_time:  float, 
+    mean_task_clock: float, 
+    system:          SystemMetric | None
+) -> ThreadMetric:
+    thread_utilization_records = []
+    thread_util_scale_factor   = mean_task_clock / mean_wall_time if mean_wall_time else 0
+
+    for record in thread_records:
+        thread_utilization_records.append((thread_util_scale_factor / record) * 100)
+
+    thread_stats             = compute_stats_metrics(thread_records)
+    thread_utilization_stats = compute_stats_metrics(thread_utilization_records)
+
+    return ThreadMetric(
+        total_context_switches       = system.total_context_switches if system else 0,
+        context_switches_stats       = system.context_switches_stats if system else MetricStats(0, 0, 0, 0, 0),
+        thread_count_stats           = thread_stats,
+        thread_utilization_stats_pct = thread_utilization_stats
+    )
 
 def compute_stats_metrics(metrics: list[float]) -> MetricStats:
     return MetricStats(

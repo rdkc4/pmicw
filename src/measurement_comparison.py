@@ -3,8 +3,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-import measurement_query as query
-from report_writer import write_report
 from metric_registry import enrich_metrics, SEGMENT_ORDER
 
 pd.set_option("display.max_columns", None)

@@ -1,32 +1,87 @@
 import subprocess
 import threading
 import time
+from typing import Callable
 import psutil
 
 from record_parser import parse_rocm_smi_output
 
+def spawn_monitor_daemon(
+    target:  Callable,
+    args:    tuple,
+    daemons: list[threading.Thread]
+) -> None:
+    daemon = threading.Thread(
+        target = target,
+        args   = args,
+        daemon = True
+    )
+
+    daemons.append(daemon)
+    daemon.start()
+
+def monitor_process_threads(
+    activity_event: threading.Event,
+    shutdown_event: threading.Event,
+    interval:       float,
+    active_pid_ref: list[int],
+    thread_records: list[float]
+) -> None:
+
+    while not shutdown_event.is_set():
+        activity_event.wait()
+
+        if shutdown_event.is_set():
+            break
+
+        while activity_event.is_set():
+            try:
+                active_pid = active_pid_ref[0]
+                if active_pid > 0:
+                    root_proc = psutil.Process(active_pid)
+
+                    children = root_proc.children(recursive=True)
+                    target_proc = children[0] if children else root_proc
+
+                    threads = target_proc.num_threads()
+                    thread_records.append(float(threads))
+                    
+                    time.sleep(interval)
+            except:
+                pass
+
+
 def monitor_process_memory(
-    proc:        subprocess.Popen, 
-    psutil_proc: psutil.Process, 
-    interval:    float
-) -> list[dict[str, float]]:
-    records: list[dict[str, float]] = []
+    activity_event: threading.Event,
+    shutdown_event: threading.Event,
+    interval:       float,
+    active_pid_ref: list[int],
+    memory_records: list[dict[str, float]]
+) -> None:
 
-    try:
-        while proc.poll() is None:
-            mem = psutil_proc.memory_info()
+    while not shutdown_event.is_set():
+        activity_event.wait()
 
-            records.append({
-                "rss_mb": mem.rss / (1024 ** 2),
-                "vms_mb": mem.vms / (1024 ** 2),
-            })
+        if shutdown_event.is_set():
+            break
 
-            time.sleep(interval)
+        while activity_event.is_set():
+            try:
+                active_pid = active_pid_ref[0]
+                if active_pid > 0:
+                    root_proc   = psutil.Process(active_pid)
+                    children    = root_proc.children(recursive = True)
+                    target_proc = children[0] if children else root_proc
+                    memory      = target_proc.memory_info()
 
-    except psutil.NoSuchProcess:
-        pass
-
-    return records
+                    memory_records.append({
+                        "rss_mb": memory.rss / (1024 ** 2),
+                        "vms_mb": memory.vms / (1024 ** 2)
+                    })
+                    
+                    time.sleep(interval)
+            except:
+                pass
 
 def monitor_amd_gpu(
     activity_event: threading.Event, 
