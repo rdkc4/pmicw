@@ -1,6 +1,9 @@
 # Directory for csv results
 data/
 
+# Directory for reports
+reports/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
