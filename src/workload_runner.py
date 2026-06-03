@@ -10,6 +10,8 @@ Asynchronous Thread Coordination Model:
     [Main Thread]                   [Background Threads]
           |                                  |
           |--> gpu_thread.start() ---------->| (Idle / Event Blocked)
+          |--> mem_thread.start() ---------->|
+          |--> thr_thread.start() ---------->|
           |                                  |
        |->| Loop: Iteration                  |
        |  |--> activity_event.set() -------->| (Wake up & sample hardware)
@@ -37,39 +39,13 @@ import threading
 import time
 import os
 
-import psutil
-
 from cli_parser import parse_args
 from measurement import Measurement, Metadata, Metrics, Workload
 from metric_computer import compute_metrics
-from metric_monitor import monitor_amd_gpu, monitor_process_memory
+from metric_monitor import monitor_amd_gpu, monitor_process_memory, monitor_process_threads, spawn_monitor_daemon
 from record_parser import parse_cpu_prof_output
 from csv_writer import write
-
-@dataclass
-class WorkloadRecords:
-    wall_times:     list[float]
-    memory_records: list[dict[str, float]]
-    gpu_records:    list[dict[str, float]]
-    perf_records:   dict[str, list[dict[str, float]]]
-    link_records:   list[dict[str, float]]
-
-@dataclass
-class WorkloadMonitors:
-    interval:       float
-    activity_event: threading.Event
-    shutdown_event: threading.Event
-    daemon_threads: list[threading.Thread]
-
-@dataclass
-class WorkloadContext:
-    iterations:        int
-    warmup_iterations: int
-    selected_metrics:  list[str]
-    command:           list[str]
-    env:               dict[str, str]
-    records:           WorkloadRecords
-    monitors:          WorkloadMonitors
+from workload_context import WorkloadContext, WorkloadMetricSelection, WorkloadMonitors
 
 @dataclass
 class PerfGroupConfig:
@@ -78,16 +54,45 @@ class PerfGroupConfig:
     env:    dict[str, str] | None
 
 def run_workload(ctx: WorkloadContext) -> Metrics:
-    perf_event_groups = set_perf_events("cpu" in ctx.selected_metrics, ctx.env)
+    perf_event_groups = set_perf_events(ctx.selected_metrics.cpu, ctx.env)
 
-    if "gpu" in ctx.selected_metrics:
-        daemon = threading.Thread(
-            target = monitor_amd_gpu,
-            args   = (ctx.monitors.activity_event, ctx.monitors.shutdown_event, ctx.monitors.interval, ctx.records.gpu_records),
-            daemon =True
+    if ctx.selected_metrics.gpu:
+        spawn_monitor_daemon(
+            target  = monitor_amd_gpu,
+            args    = (
+                ctx.monitors.activity_event, 
+                ctx.monitors.shutdown_event, 
+                ctx.monitors.interval, 
+                ctx.records['gpu']
+            ),
+            daemons = ctx.monitors.daemon_threads
         )
-        ctx.monitors.daemon_threads.append(daemon)
-        daemon.start()
+
+    if ctx.selected_metrics.memory:
+        spawn_monitor_daemon(
+            target  = monitor_process_memory,
+            args    = (
+                ctx.monitors.activity_event, 
+                ctx.monitors.shutdown_event, 
+                ctx.monitors.interval, 
+                ctx.monitors.active_pid, 
+                ctx.records['memory']
+            ),
+            daemons = ctx.monitors.daemon_threads
+        )
+
+    if ctx.selected_metrics.thread:
+        spawn_monitor_daemon(
+            target  = monitor_process_threads,
+            args    = (
+                ctx.monitors.activity_event, 
+                ctx.monitors.shutdown_event, 
+                ctx.monitors.interval, 
+                ctx.monitors.active_pid, 
+                ctx.records['thread']
+            ),
+            daemons = ctx.monitors.daemon_threads
+        )
 
     try:
         warmup_workload(ctx.command)
@@ -96,46 +101,34 @@ def run_workload(ctx: WorkloadContext) -> Metrics:
             for event_group in perf_event_groups:
                 command = ["perf", "stat", "-j", "-e", f"{{{",".join(event_group.events)}}}"] + ctx.command
 
-                wall_times, perf_records, memory_records, link_records = execute_workload(
-                    command         = command,
-                    ctx             = ctx,
-                    cpu_selected    = "cpu" in ctx.selected_metrics,
-                    memory_selected = "memory" in ctx.selected_metrics,
-                    env             = event_group.env
+                wall_times, perf_records, memory_records, link_records, thread_records = execute_workload(
+                    command = command,
+                    ctx     = ctx,
+                    env     = event_group.env
                 )
 
-                ctx.records.wall_times                    += wall_times
-                ctx.records.memory_records                += memory_records
-                ctx.records.perf_records[event_group.name] = perf_records
-                if link_records:
-                    ctx.records.link_records              += link_records
+                ctx.records['wall-time'] += wall_times
+                ctx.records['memory']    += memory_records
+                ctx.records['perf']      += perf_records
+                ctx.records['thread']    += thread_records
+                ctx.records['ld']        += link_records
 
         else:
-            wall_times, _, memory_records, _ = execute_workload(
-                command         = ctx.command,
-                ctx             = ctx,
-                cpu_selected    = "cpu" in ctx.selected_metrics,
-                memory_selected = "memory" in ctx.selected_metrics  
+            wall_times, _, memory_records, _, thread_records = execute_workload(
+                command = ctx.command,
+                ctx     = ctx
             )
 
-            ctx.records.wall_times      = wall_times
-            ctx.records.memory_records += memory_records
+            ctx.records['wall-time']  = wall_times
+            ctx.records['memory']    += memory_records
+            ctx.records['thread']    += thread_records
 
     finally:
         ctx.monitors.shutdown_event.set()
         for daemon in ctx.monitors.daemon_threads:
             daemon.join()
 
-    metrics = compute_metrics(
-        ctx.selected_metrics, 
-        ctx.records.wall_times, 
-        ctx.records.perf_records, 
-        ctx.records.memory_records, 
-        ctx.records.gpu_records,
-        ctx.records.link_records
-    )
-
-    return metrics
+    return compute_metrics(ctx.selected_metrics, ctx.records)
 
 def warmup_workload(command: list[str], warmup_iterations: int = 0) -> None:
     for _ in range(warmup_iterations):
@@ -144,18 +137,16 @@ def warmup_workload(command: list[str], warmup_iterations: int = 0) -> None:
 def execute_workload(
     command:         list[str],
     ctx:             WorkloadContext,
-    cpu_selected:    bool,
-    memory_selected: bool,
     env:             dict[str, str] | None = None
-) -> tuple[list[float], list[dict[str, float]], list[dict[str, float]], list[dict[str, float]]]:
+) -> tuple[list[dict[str, float]], list[dict[str, float]], list[dict[str, float]], list[dict[str, float]], list[dict[str, float]]]:
     
-    wall_times:     list[float]            = []
+    wall_times:     list[dict[str, float]] = []
     perf_records:   list[dict[str, float]] = []
     memory_records: list[dict[str, float]] = []
     link_records:   list[dict[str, float]] = []
+    thread_records: list[dict[str, float]] = []
 
     for _ in range(ctx.iterations):
-        ctx.monitors.activity_event.set()
         start = time.perf_counter()
 
         proc = subprocess.Popen(
@@ -166,13 +157,8 @@ def execute_workload(
             env    = env
         )
 
-        parent_process     = psutil.Process(proc.pid)
-        children_processes = parent_process.children(recursive = True)
-        program_process    = children_processes[0] if cpu_selected and len(children_processes) > 0 else parent_process
-
-        if memory_selected:
-            memory_samples  = monitor_process_memory(proc, program_process, ctx.monitors.interval)
-            memory_records += memory_samples
+        ctx.monitors.active_pid[0] = proc.pid
+        ctx.monitors.activity_event.set()
 
         _, stderr = proc.communicate()
 
@@ -183,14 +169,15 @@ def execute_workload(
             )
 
         ctx.monitors.activity_event.clear()
-        wall_times.append((time.perf_counter() - start) * 1000)
+        ctx.monitors.active_pid[0] = -1
+        wall_times.append({'execution_time': (time.perf_counter() - start) * 1000})
         
-        if cpu_selected:
+        if ctx.selected_metrics.cpu:
             perf_record, link_record = parse_cpu_prof_output(stderr, proc.pid)
             perf_records.append(perf_record)
             link_records.append(link_record)
 
-    return wall_times, perf_records, memory_records, link_records
+    return wall_times, perf_records, memory_records, link_records, thread_records
     
 
 def set_perf_events(cpu_selected: bool, env: dict[str,str] | None = None) -> list[PerfGroupConfig]:
@@ -241,19 +228,16 @@ def setup_workload_context(args: argparse.Namespace):
     env["LD_DEBUG"]    = "statistics"
     env["LD_BIND_NOW"] = "1"
 
-    records = WorkloadRecords(
-        wall_times     = [],
-        memory_records = [],
-        gpu_records    = [],
-        perf_records   = {
-            "execution_core": [],
-            "l1_caches":      [],
-            "l2_llc_caches":  []
-        },
-        link_records   = []
+    metrics = WorkloadMetricSelection(
+        wall_time = True,
+        cpu       = 'cpu'    in args.metric,
+        gpu       = 'gpu'    in args.metric,
+        memory    = 'memory' in args.metric,
+        thread    = 'thread' in args.metric
     )
 
     monitors = WorkloadMonitors(
+        active_pid     = [-1],
         interval       = 0.1,
         activity_event = threading.Event(),
         shutdown_event = threading.Event(),
@@ -263,10 +247,17 @@ def setup_workload_context(args: argparse.Namespace):
     return WorkloadContext(
         iterations        = args.iteration,
         warmup_iterations = args.warmup_iteration,
-        selected_metrics  = args.metric,
+        selected_metrics  = metrics,
         command           = [args.workload] + (args.workload_args or []),
         env               = env,
-        records           = records,
+        records           = {
+            'wall-time': [],
+            'perf':      [],
+            'ld':        [],
+            'gpu':       [],
+            'memory':    [],
+            'thread':    []
+        },
         monitors          = monitors
     )
 

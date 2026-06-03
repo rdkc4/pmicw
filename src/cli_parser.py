@@ -16,9 +16,9 @@ Core Structural Rules:
     
  - [options]
     - `-m`, `--metric` - list of metrics separated by comma
-                       - options: wall-time, cpu, gpu, memory
+                       - options: wall-time, cpu, gpu, memory, thread
                        - default: wall-time (always included)
-                       - usage: [--metric wall-time,cpu,gpu,memory]
+                       - usage: [--metric wall-time,cpu,gpu,memory,thread]
 
     - `-wit`, `--warmup-iteration` - number of warmup iterations workload should run
                                    - default: 0
@@ -88,7 +88,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     options.add_argument(
         '-m', '--metric',
         type    = parse_metrics,
-        default = ['wall-time'], # options: wall-time, cpu, gpu, memory
+        default = ['wall-time'], # options: wall-time, cpu, gpu, memory, thread
         help    = 'metrics to collect separated by comma (default: wall-time)'
     )
 
@@ -145,7 +145,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     )
 
 def parse_metrics(metrics_str: str) -> list[str]:
-    valid   = {'wall-time', 'cpu', 'gpu', 'memory'}
+    valid   = {'wall-time', 'cpu', 'gpu', 'memory', 'thread'}
     metrics = [m.strip() for m in metrics_str.split(',')]
 
     invalid = set(metrics) - valid

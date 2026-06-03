@@ -20,12 +20,8 @@ def parse_cpu_prof_output(perf_output: str, pid: int) -> tuple[dict[str, float],
 
     parsed_perf         = parse_perf_json_records(perf_json_records)
     dynamic_link_cycles = parse_ld_records(ld_records)
-    total_cycles        = parsed_perf.get("cycles", 0.0)
 
-    if dynamic_link_cycles and total_cycles > 0:
-        return parsed_perf, {"cycles": total_cycles, "ld": dynamic_link_cycles}
-
-    return parsed_perf, {}
+    return parsed_perf, dynamic_link_cycles
 
 def parse_perf_json_records(perf_json_records: list[dict]) -> dict[str, float]:
     metrics: dict[str, float] = {}
@@ -42,14 +38,14 @@ def parse_perf_json_records(perf_json_records: list[dict]) -> dict[str, float]:
 
     return metrics
 
-def parse_ld_records(ld_records: list[str]) -> float | None:
+def parse_ld_records(ld_records: list[str]) -> dict[str, float]:
     pattern = re.compile(r"total startup time in dynamic loader:\s*(\d+)\s*cycles")
 
     for record in reversed(ld_records):
         match = pattern.search(record)
         if match:
-            return float(match.group(1))
-    return None
+            return {'ld': float(match.group(1))}
+    return {}
 
 def parse_rocm_smi_output(rocm_smi_output: str, device_index: int) -> dict[str, float]:
     json_start = rocm_smi_output.find("{")

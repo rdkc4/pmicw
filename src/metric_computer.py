@@ -10,75 +10,78 @@ from measurement import (
     MetricStats,
     Metrics,
     StartupMetric,
-    SystemMetric,
-    TaskClockMetric, 
+    TaskClockMetric,
+    ThreadMetric, 
     WallTimeMetric
 )
+from itertools import chain
 from statistics import mean, median, stdev
 from collections import defaultdict
+from workload_context import WorkloadMetricSelection
 
-def compute_metrics(
-    selected_metrics: list[str], 
-    wall_times:       list[float],
-    perf_records:     dict[str, list[dict[str, float]]], 
-    memory_records:   list[dict[str, float]], 
-    gpu_records:      list[dict[str, float]],
-    link_records:     list[dict[str, float]]
-) -> Metrics:
-    cpu_metrics       = None
-    system_metrics    = None
-    memory_metrics    = None
-    gpu_metrics       = None
-    startup_metrics   = None
-    wall_time_metrics = compute_wall_time_metric(wall_times)
+Record      = dict[str, float]
+RecordList  = list[Record]
+FlatRecords = dict[str, list[float]]
 
-    if "cpu" in selected_metrics:
-        ipc_metric, task_clock_metric, branch_prediction_metric, system_metrics = compute_execution_core_metrics(perf_records["execution_core"])
-        l1_cache_metric                                                         = compute_l1_cache_metrics(perf_records["l1_caches"])
-        l2_cache_metric                                                         = compute_l2_cache_metrics(perf_records["l2_llc_caches"])
-        llc_cache_metric                                                        = compute_shared_cache_metrics(perf_records["l2_llc_caches"])
-        startup_metrics                                                         = compute_startup_metrics(link_records, wall_time_metrics.wall_time_stats_ms.mean_value)
-        
+def compute_metrics(selected_metrics: WorkloadMetricSelection, records: dict[str, RecordList]) -> Metrics:
+    flat_metrics       = extract_metrics_from_groups(records)
+    wall_time_metrics  = compute_wall_time_metric(flat_metrics)
+    mean_wall_time_ms  = wall_time_metrics.wall_time_stats_ms.mean_value
+    mean_task_clock_ms = 0
+
+    cpu_metrics = gpu_metrics = memory_metrics = startup_metrics = thread_metrics = None
+
+    if selected_metrics.cpu:
+        ipc, task_clock, branch = compute_execution_core_metrics(flat_metrics)
+        l1                      = compute_l1_cache_metrics(flat_metrics)
+        l2                      = compute_l2_cache_metrics(flat_metrics)
+        llc                     = compute_shared_cache_metrics(flat_metrics)
+        startup_metrics         = compute_startup_metrics(flat_metrics, mean_wall_time_ms)
+
+        mean_task_clock_ms = task_clock.task_clock_stats_ms.mean_value
+
         cpu_metrics = CPUMetric(
-            ipc               = ipc_metric,
-            task_clock        = task_clock_metric,
-            l1_cache          = l1_cache_metric,
-            l2_cache          = l2_cache_metric,
-            llc_cache         = llc_cache_metric,
-            branch_prediction = branch_prediction_metric,
+            ipc               = ipc,
+            task_clock        = task_clock,
+            l1_cache          = l1,
+            l2_cache          = l2,
+            llc_cache         = llc,
+            branch_prediction = branch
         )
 
-    if "memory" in selected_metrics:
-        memory_metrics = compute_memory_metrics(memory_records)
-    
-    if "gpu" in selected_metrics:
-        gpu_metrics = compute_gpu_metrics(gpu_records)
+    if selected_metrics.memory:
+        memory_metrics = compute_memory_metrics(flat_metrics)
+
+    if selected_metrics.gpu:
+        gpu_metrics    = compute_gpu_metrics(flat_metrics)
+
+    if selected_metrics.thread:
+        thread_metrics = compute_thread_metrics(flat_metrics, mean_wall_time_ms, mean_task_clock_ms)
 
     return Metrics(
         wall_time = wall_time_metrics,
         cpu       = cpu_metrics,
         gpu       = gpu_metrics,
         memory    = memory_metrics,
-        system    = system_metrics,
-        startup   = startup_metrics
+        startup   = startup_metrics,
+        thread    = thread_metrics
     )
 
-def compute_wall_time_metric(wall_times: list[float]) -> WallTimeMetric:
+def compute_wall_time_metric(records: FlatRecords) -> WallTimeMetric:
     return WallTimeMetric(
-        wall_time_total_ms = sum(wall_times),
-        wall_time_stats_ms = compute_stats_metrics(wall_times)
+        wall_time_total_ms = sum(records['execution_time']),
+        wall_time_stats_ms = compute_stats_metrics(records['execution_time'])
     )
 
-def compute_execution_core_metrics(core_records: list[dict[str, float]]) -> tuple[IPCMetric, TaskClockMetric, BranchPredictionMetric, SystemMetric]:
-    ipc_metrics               = compute_ipc_metrics(core_records)
-    task_clock_metrics        = compute_task_clock_metrics(core_records)
-    branch_prediction_metrics = compute_branch_prediction_metrics(core_records)
-    system_metrics            = compute_system_metrics(core_records)
+def compute_execution_core_metrics(records: FlatRecords) -> tuple[IPCMetric, TaskClockMetric, BranchPredictionMetric]:
+    ipc_metrics               = compute_ipc_metrics(records)
+    task_clock_metrics        = compute_task_clock_metrics(records)
+    branch_prediction_metrics = compute_branch_prediction_metrics(records)
     
-    return ipc_metrics, task_clock_metrics, branch_prediction_metrics, system_metrics
+    return ipc_metrics, task_clock_metrics, branch_prediction_metrics
 
-def compute_ipc_metrics(core_records: list[dict[str, float]]) -> IPCMetric:
-    total_instructions, total_cycles, ipc_stats = compute_ratio_metrics(core_records, "instructions", "cycles")
+def compute_ipc_metrics(records: FlatRecords) -> IPCMetric:
+    total_instructions, total_cycles, ipc_stats = compute_ratio_metrics(records, "instructions", "cycles")
 
     return IPCMetric(
         total_instructions = int(total_instructions),
@@ -86,25 +89,18 @@ def compute_ipc_metrics(core_records: list[dict[str, float]]) -> IPCMetric:
         ipc_stats          = ipc_stats
     )
 
-def compute_task_clock_metrics(core_records: list[dict[str, float]]) -> TaskClockMetric:
-    task_clock_values   = []
-    total_task_clock_ms = 0
-
-    for record in core_records:
-        task_clock = record.get('task-clock')
-        if task_clock:
-            task_clock_ms        = task_clock / 1000000
-            total_task_clock_ms += task_clock_ms
-            task_clock_values.append(task_clock_ms)
+def compute_task_clock_metrics(records: FlatRecords) -> TaskClockMetric:
+    task_clock_values = records.get('task-clock', [])
+    task_clock_values = [value / 1000000 for value in task_clock_values]
 
     return TaskClockMetric(
-        task_clock_total_ms = total_task_clock_ms,
+        task_clock_total_ms = sum(task_clock_values),
         task_clock_stats_ms = compute_stats_metrics(task_clock_values)
     )
 
 
-def compute_branch_prediction_metrics(core_records: list[dict[str, float]]) -> BranchPredictionMetric:
-    total_branch_miss, total_branch, branch_miss_rate_stats = compute_ratio_metrics(core_records, "branch-misses", "branches")
+def compute_branch_prediction_metrics(records: FlatRecords) -> BranchPredictionMetric:
+    total_branch_miss, total_branch, branch_miss_rate_stats = compute_ratio_metrics(records, "branch-misses", "branches")
 
     return BranchPredictionMetric(
         total_branches             = int(total_branch),
@@ -112,9 +108,9 @@ def compute_branch_prediction_metrics(core_records: list[dict[str, float]]) -> B
         branch_miss_rate_stats_pct = branch_miss_rate_stats
     )
 
-def compute_l1_cache_metrics(l1_records: list[dict[str, float]]) -> L1CacheMetric:
-    total_l1d_miss, total_l1d_access, l1d_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-dcache-load-misses", "L1-dcache-loads")
-    total_l1i_miss, total_l1i_access, l1i_miss_rate_stats = compute_ratio_metrics(l1_records, "L1-icache-load-misses", "L1-icache-loads")
+def compute_l1_cache_metrics(records: FlatRecords) -> L1CacheMetric:
+    total_l1d_miss, total_l1d_access, l1d_miss_rate_stats = compute_ratio_metrics(records, "L1-dcache-load-misses", "L1-dcache-loads")
+    total_l1i_miss, total_l1i_access, l1i_miss_rate_stats = compute_ratio_metrics(records, "L1-icache-load-misses", "L1-icache-loads")
     
     return L1CacheMetric(
         l1d_total_accesses      = int(total_l1d_access),
@@ -125,8 +121,8 @@ def compute_l1_cache_metrics(l1_records: list[dict[str, float]]) -> L1CacheMetri
         l1i_miss_rate_stats_pct = l1i_miss_rate_stats
     )
 
-def compute_l2_cache_metrics(l2_records: list[dict[str, float]]) -> L2CacheMetric:
-    total_l2_miss, total_l2_access, l2_miss_rate_stats = compute_ratio_metrics(l2_records, "l2_cache_req_stat.ic_dc_miss_in_l2", "l2_cache_req_stat.all")
+def compute_l2_cache_metrics(records: FlatRecords) -> L2CacheMetric:
+    total_l2_miss, total_l2_access, l2_miss_rate_stats = compute_ratio_metrics(records, "l2_cache_req_stat.ic_dc_miss_in_l2", "l2_cache_req_stat.all")
 
     return L2CacheMetric(
         l2_total_accesses      = int(total_l2_access),
@@ -134,61 +130,44 @@ def compute_l2_cache_metrics(l2_records: list[dict[str, float]]) -> L2CacheMetri
         l2_miss_rate_stats_pct = l2_miss_rate_stats
     )
 
-def compute_shared_cache_metrics(shared_cache_records: list[dict[str, float]]) -> LLCacheMetric:
-    total_llc_miss, total_llc_access, llc_miss_rate_stats = compute_ratio_metrics(shared_cache_records, "cache-misses", "cache-references")
+def compute_shared_cache_metrics(records: FlatRecords) -> LLCacheMetric:
+    total_llc_miss, total_llc_access, llc_miss_rate_stats = compute_ratio_metrics(records, "cache-misses", "cache-references")
 
     return LLCacheMetric(
         llc_total_accesses      = int(total_llc_access),
         llc_total_misses        = int(total_llc_miss),
         llc_miss_rate_stats_pct = llc_miss_rate_stats
     )
-
-def compute_system_metrics(system_records: list[dict[str, float]]) -> SystemMetric:
-    counters = defaultdict(list)
-
-    for record in system_records:
-        for key, value in record.items():
-            if value is not None:
-                counters[key].append(value)
-
-    return SystemMetric(
-        total_context_switches = int(sum(counters["context-switches"])),
-        total_page_faults      = int(sum(counters["page-faults"])),
-        total_minor_faults     = int(sum(counters["minor-faults"])),
-        total_major_faults     = int(sum(counters["major-faults"])),
-
-        context_switches_stats = compute_stats_metrics(counters["context-switches"]),
-        page_faults_stats      = compute_stats_metrics(counters["page-faults"]),
-        minor_faults_stats     = compute_stats_metrics(counters["minor-faults"]),
-        major_faults_stats     = compute_stats_metrics(counters["major-faults"]),
-    )
     
-def compute_memory_metrics(memory_records: list[dict[str, float]]) -> MemoryMetric:
-    rss = []
-    vms = []
-    for record in memory_records:
-        rss.append(record["rss_mb"])
-        vms.append(record["vms_mb"])
+def compute_memory_metrics(records: FlatRecords) -> MemoryMetric:
+    rss          = records.get('rss_mb',       [])
+    vms          = records.get('vms_mb',       [])
+    page_faults  = records.get('page-faults',  [])
+    minor_faults = records.get('minor-faults', [])
+    major_faults = records.get('major-faults', [])
 
     return MemoryMetric(
-        rss_stats_mb = compute_stats_metrics(rss),
-        vms_stats_mb = compute_stats_metrics(vms)
+        total_page_faults  = int(sum(page_faults)), 
+        total_minor_faults = int(sum(minor_faults)), 
+        total_major_faults = int(sum(major_faults)),
+        rss_stats_mb       = compute_stats_metrics(rss),
+        vms_stats_mb       = compute_stats_metrics(vms),
+        page_faults_stats  = compute_stats_metrics(page_faults),
+        minor_faults_stats = compute_stats_metrics(minor_faults),
+        major_faults_stats = compute_stats_metrics(major_faults)
     )
 
-def compute_gpu_metrics(gpu_records: list[dict[str, float]]) -> GPUMetric:
-    activity = []
-    vram     = []
-    for record in gpu_records:
-        activity.append(record["gfx_activity_pct"])
-        vram.append(record["vram_pct"])
+def compute_gpu_metrics(records: FlatRecords) -> GPUMetric:
+    activity = records.get('gfx_activity_pct', [])
+    vram     = records.get('vram_pct',         [])
 
     return GPUMetric(
         activity_stats_pct = compute_stats_metrics(activity),
         vram_stats_pct     = compute_stats_metrics(vram)
     )
 
-def compute_startup_metrics(link_records: list[dict[str, float]], mean_wall_time: float) -> StartupMetric:
-    link_cycles, _, cycle_ratio = compute_ratio_metrics(link_records, "ld", "cycles")
+def compute_startup_metrics(records: FlatRecords, mean_wall_time: float) -> StartupMetric:
+    link_cycles, _, cycle_ratio = compute_ratio_metrics(records, "ld", "cycles")
 
     return StartupMetric(
         linker_total_cycles   = int(link_cycles),
@@ -201,6 +180,18 @@ def compute_startup_metrics(link_records: list[dict[str, float]], mean_wall_time
         )
     )
 
+def compute_thread_metrics(records: FlatRecords, mean_wall_time: float, mean_task_clock: float) -> ThreadMetric:
+    thread_counts              = records.get('threads',          [])
+    context_switches           = records.get('context-switches', [])
+    thread_util_scale_factor   = mean_task_clock / mean_wall_time if mean_wall_time else 0
+    thread_utilization_records = [thread_util_scale_factor / count * 100 for count in thread_counts]
+
+    return ThreadMetric(
+        total_context_switches       = int(sum(context_switches)),
+        context_switches_stats       = compute_stats_metrics(context_switches),
+        thread_count_stats           = compute_stats_metrics(thread_counts),
+        thread_utilization_stats_pct = compute_stats_metrics(thread_utilization_records)
+    )
 
 def compute_stats_metrics(metrics: list[float]) -> MetricStats:
     return MetricStats(
@@ -211,18 +202,29 @@ def compute_stats_metrics(metrics: list[float]) -> MetricStats:
         max_value    = max(metrics)    if metrics          else 0.0,
     )
 
-def compute_ratio_metrics(records: list[dict[str, float]], numerator_key: str, denominator_key: str) -> tuple[float, float, MetricStats]:
+def compute_ratio_metrics(records: FlatRecords, numerator_key: str, denominator_key: str) -> tuple[float, float, MetricStats]:
     ratio_values      = []
     total_numerator   = 0
     total_denominator = 0
 
-    for record in records:
-        numerator   = record.get(numerator_key)
-        denominator = record.get(denominator_key)
+    numerators   = records.get(numerator_key,   [])
+    denominators = records.get(denominator_key, [])
 
-        if numerator is not None and denominator is not None and denominator > 0:
-            ratio_values.append(numerator / denominator)
-            total_numerator   += numerator
-            total_denominator += denominator
+    if len(numerators) == len(denominators):
+        for (num, den) in zip(numerators, denominators):
+            if den != 0:
+                ratio_values.append(num / den)
+                total_numerator   += num
+                total_denominator += den
 
     return total_numerator, total_denominator, compute_stats_metrics(ratio_values)
+
+def extract_metrics_from_groups(groups: dict[str, RecordList]) -> dict[str, list[float]]:
+    extracted_metrics = defaultdict(list)
+    
+    for item in chain.from_iterable(groups.values()):
+        for metric_name, value in item.items():
+            if value is not None:
+                extracted_metrics[metric_name.split(':')[0]].append(value)
+    
+    return dict(extracted_metrics)
