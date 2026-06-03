@@ -21,10 +21,11 @@ from workload_context import WorkloadMetricSelection
 
 Record      = dict[str, float]
 RecordList  = list[Record]
+RecordGroup = dict[str, RecordList]
 FlatRecords = dict[str, list[float]]
 
-def compute_metrics(selected_metrics: WorkloadMetricSelection, records: dict[str, RecordList]) -> Metrics:
-    flat_metrics       = extract_metrics_from_groups(records)
+def compute_metrics(selected_metrics: WorkloadMetricSelection, record_groups: RecordGroup) -> Metrics:
+    flat_metrics       = extract_metrics_from_groups(record_groups)
     wall_time_metrics  = compute_wall_time_metric(flat_metrics)
     mean_wall_time_ms  = wall_time_metrics.wall_time_stats_ms.mean_value
     mean_task_clock_ms = 0
@@ -32,11 +33,13 @@ def compute_metrics(selected_metrics: WorkloadMetricSelection, records: dict[str
     cpu_metrics = gpu_metrics = memory_metrics = startup_metrics = thread_metrics = None
 
     if selected_metrics.cpu:
-        ipc, task_clock, branch = compute_execution_core_metrics(flat_metrics)
-        l1                      = compute_l1_cache_metrics(flat_metrics)
-        l2                      = compute_l2_cache_metrics(flat_metrics)
-        llc                     = compute_shared_cache_metrics(flat_metrics)
-        startup_metrics         = compute_startup_metrics(flat_metrics, mean_wall_time_ms)
+        ipc             = compute_ipc_metrics(flat_metrics)
+        task_clock      = compute_task_clock_metrics(flat_metrics)
+        branch          = compute_branch_prediction_metrics(flat_metrics)
+        l1              = compute_l1_cache_metrics(flat_metrics)
+        l2              = compute_l2_cache_metrics(flat_metrics)
+        llc             = compute_llc_cache_metrics(flat_metrics)
+        startup_metrics = compute_startup_metrics(flat_metrics, mean_wall_time_ms)
 
         mean_task_clock_ms = task_clock.task_clock_stats_ms.mean_value
 
@@ -72,13 +75,6 @@ def compute_wall_time_metric(records: FlatRecords) -> WallTimeMetric:
         wall_time_total_ms = sum(records['execution_time']),
         wall_time_stats_ms = compute_stats_metrics(records['execution_time'])
     )
-
-def compute_execution_core_metrics(records: FlatRecords) -> tuple[IPCMetric, TaskClockMetric, BranchPredictionMetric]:
-    ipc_metrics               = compute_ipc_metrics(records)
-    task_clock_metrics        = compute_task_clock_metrics(records)
-    branch_prediction_metrics = compute_branch_prediction_metrics(records)
-    
-    return ipc_metrics, task_clock_metrics, branch_prediction_metrics
 
 def compute_ipc_metrics(records: FlatRecords) -> IPCMetric:
     total_instructions, total_cycles, ipc_stats = compute_ratio_metrics(records, "instructions", "cycles")
@@ -130,7 +126,7 @@ def compute_l2_cache_metrics(records: FlatRecords) -> L2CacheMetric:
         l2_miss_rate_stats_pct = l2_miss_rate_stats
     )
 
-def compute_shared_cache_metrics(records: FlatRecords) -> LLCacheMetric:
+def compute_llc_cache_metrics(records: FlatRecords) -> LLCacheMetric:
     total_llc_miss, total_llc_access, llc_miss_rate_stats = compute_ratio_metrics(records, "cache-misses", "cache-references")
 
     return LLCacheMetric(

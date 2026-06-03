@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RUN_ID=$(date +%Y%m%d_%H%M%S)
-POSTURE_FILE="host_posture_${RUN_ID}.log"
 STATE_FILE="${1:?usage: host_pre.sh <state_file>}"
 
 # Capture original state
@@ -53,57 +51,5 @@ if [[ -f /proc/sys/vm/drop_caches ]]; then
 else
     echo "Warning: /proc/sys/vm/drop_caches not found. Skipping cache drop."
 fi
-
-echo "=================================================="  > "$POSTURE_FILE"
-echo " HOST POSTURE"                                      >> "$POSTURE_FILE"
-echo "==================================================" >> "$POSTURE_FILE"
-
-{
-    echo "--- OS & Kernel ---"
-    uname -a
-    
-    echo "--- CPU ---"
-    lscpu
-
-    echo "--- NUMA ---"
-    if command -v numactl &>/dev/null; then
-        numactl --hardware
-    else
-        echo "numactl not installed"
-    fi
-
-    echo "--- CPU Governor ---"
-    if [[ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]]; then
-         cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-    else
-        echo "CPU frequency scaling not supported."
-    fi
-
-    echo "--- Turbo State ---"
-    if [[ -f /sys/devices/system/cpu/intel_pstate/no_turbo ]]; then
-        cat /sys/devices/system/cpu/intel_pstate/no_turbo
-    elif [[ -f /sys/devices/system/cpu/cpufreq/boost ]]; then
-        cat /sys/devices/system/cpu/cpufreq/boost
-    else
-        echo "Turbo boost control not found."
-    fi
-
-    echo "--- THP ---"
-    if [[ -f /sys/kernel/mm/transparent_hugepage/enabled ]]; then
-        cat /sys/kernel/mm/transparent_hugepage/enabled
-    else
-        echo "THP enabled control not found."
-    fi
-
-    if [[ -f /sys/kernel/mm/transparent_hugepage/defrag ]]; then
-        cat /sys/kernel/mm/transparent_hugepage/defrag
-    else
-        echo "THP defrag control not found."
-    fi
-
-    echo "--- Memory ---"
-    free -h
-
-} >> "$POSTURE_FILE"
 
 echo "[host_pre] done"
