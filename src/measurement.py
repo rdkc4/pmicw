@@ -91,15 +91,11 @@ Data Model Hierarchy Map:
     |   |   |-> vram_stats_pct (mean, median, stddev, min, max)
     |   |
     |   |-> MemoryMetric
-    |   |   |-> rss_stats_mb (mean, median, stddev, min, max)
-    |   |   |-> vms_stats_mb (mean, median, stddev, min, max)
-    |   |
-    |   |-> SystemMetric
-    |   |   |-> total_context_switches
     |   |   |-> total_page_faults
     |   |   |-> total_minor_faults
     |   |   |-> total_major_faults
-    |   |   |-> context_switches_stats (mean, median, stddev, min, max)
+    |   |   |-> rss_stats_mb (mean, median, stddev, min, max)
+    |   |   |-> vms_stats_mb (mean, median, stddev, min, max)
     |   |   |-> page_faults_stats (mean, median, stddev, min, max)
     |   |   |-> minor_faults_stats (mean, median, stddev, min, max)
     |   |   |-> major_faults_stats (mean, median, stddev, min, max)
@@ -533,41 +529,22 @@ class MemoryMetric:
     """
     Host volatile workspace allocations sampled via psutil tracking threads.
     """
-    rss_stats_mb: MetricStats
-    vms_stats_mb: MetricStats
+    total_page_faults:  int
+    total_minor_faults: int
+    total_major_faults: int
+    rss_stats_mb:       MetricStats
+    vms_stats_mb:       MetricStats
+    page_faults_stats:  MetricStats
+    minor_faults_stats: MetricStats
+    major_faults_stats: MetricStats
 
     @classmethod
     def to_csv_header(cls) -> str:
-        return f"{MetricStats.to_csv_header('rss_mb')},{MetricStats.to_csv_header('vms_mb')}"
+        return f"total_page_faults,total_minor_faults,total_major_faults,{MetricStats.to_csv_header('rss_mb')},{MetricStats.to_csv_header('vms_mb')},{MetricStats.to_csv_header('page_faults')},{MetricStats.to_csv_header('minor_faults')},{MetricStats.to_csv_header('major_faults')}"
 
     def data_to_csv(self) -> str:
-        return f"{self.rss_stats_mb.data_to_csv()},{self.vms_stats_mb.data_to_csv()}"
+        return f"{self.total_page_faults},{self.total_minor_faults},{self.total_major_faults},{self.rss_stats_mb.data_to_csv()},{self.vms_stats_mb.data_to_csv()},{self.page_faults_stats.data_to_csv()},{self.minor_faults_stats.data_to_csv()},{self.major_faults_stats.data_to_csv()}"
 
-@dataclass
-class SystemMetric:
-    """
-    Linux kernel scheduler and software abstraction layer telemetry.
-    Captures raw operational counts alongside structural thread behavior frequencies:
-        - context_switches: CPU thread scheduling migrations.
-        - page_faults: Virtual memory mapping re-allocations.
-        - minor_faults: Quick memory mappings resolved without disk access.
-        - major_faults: Heavy I/O blocking faults requiring physical disk page swaps.
-    """
-    total_context_switches: int
-    total_page_faults:      int
-    total_minor_faults:     int
-    total_major_faults:     int
-    context_switches_stats: MetricStats
-    page_faults_stats:      MetricStats
-    minor_faults_stats:     MetricStats
-    major_faults_stats:     MetricStats
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"total_page_faults,total_minor_faults,total_major_faults,{MetricStats.to_csv_header('page_fault')},{MetricStats.to_csv_header('minor_fault')},{MetricStats.to_csv_header('major_fault')}"
-
-    def data_to_csv(self) -> str:
-        return f"{self.total_page_faults},{self.total_minor_faults},{self.total_major_faults},{self.page_faults_stats.data_to_csv()},{self.minor_faults_stats.data_to_csv()},{self.major_faults_stats.data_to_csv()}"
 
 @dataclass
 class StartupMetric:
@@ -606,13 +583,12 @@ class Metrics:
     cpu:       CPUMetric     | None
     gpu:       GPUMetric     | None
     memory:    MemoryMetric  | None
-    system:    SystemMetric  | None
     startup:   StartupMetric | None
     thread:    ThreadMetric  | None
 
     @classmethod
     def to_csv_header(cls) -> str:
-        return f"{WallTimeMetric.to_csv_header()},{CPUMetric.to_csv_header()},{GPUMetric.to_csv_header()},{MemoryMetric.to_csv_header()},{SystemMetric.to_csv_header()},{StartupMetric.to_csv_header()},{ThreadMetric.to_csv_header()}"
+        return f"{WallTimeMetric.to_csv_header()},{CPUMetric.to_csv_header()},{GPUMetric.to_csv_header()},{MemoryMetric.to_csv_header()},{StartupMetric.to_csv_header()},{ThreadMetric.to_csv_header()}"
 
     def data_to_csv(self) -> str:
         return ",".join([
@@ -620,7 +596,6 @@ class Metrics:
             self.cpu.data_to_csv()     if self.cpu     else ",".join([""] * len(CPUMetric.to_csv_header().split(","))),
             self.gpu.data_to_csv()     if self.gpu     else ",".join([""] * len(GPUMetric.to_csv_header().split(","))),
             self.memory.data_to_csv()  if self.memory  else ",".join([""] * len(MemoryMetric.to_csv_header().split(","))),
-            self.system.data_to_csv()  if self.system  else ",".join([""] * len(SystemMetric.to_csv_header().split(","))),
             self.startup.data_to_csv() if self.startup else ",".join([""] * len(StartupMetric.to_csv_header().split(","))),
             self.thread.data_to_csv()  if self.thread  else ",".join([""] * len(ThreadMetric.to_csv_header().split(",")))
         ])

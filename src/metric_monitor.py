@@ -25,7 +25,7 @@ def monitor_process_threads(
     shutdown_event: threading.Event,
     interval:       float,
     active_pid_ref: list[int],
-    thread_records: list[float]
+    thread_records: list[dict[str, float]]
 ) -> None:
 
     while not shutdown_event.is_set():
@@ -44,7 +44,7 @@ def monitor_process_threads(
                     target_proc = children[0] if children else root_proc
 
                     threads = target_proc.num_threads()
-                    thread_records.append(float(threads))
+                    thread_records.append({'threads': float(threads)})
                     
                     time.sleep(interval)
             except:

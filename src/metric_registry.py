@@ -25,7 +25,7 @@ def get_direction(metric: str) -> bool:
 def get_display_order(metric: str) -> int:
     return int(str(METRIC_REGISTRY.get(metric, {}).get("display_order", 9999)))
 
-SEGMENT_ORDER = ["workload_info", "wall_time", "cpu", "gpu", "memory", "system", "startup", "thread", "system_info", "other"]
+SEGMENT_ORDER = ["workload_info", "wall_time", "cpu", "gpu", "memory", "startup", "thread", "system_info", "other"]
 
 METRIC_REGISTRY: dict[str, dict[str, object]] = {
    
@@ -116,40 +116,34 @@ METRIC_REGISTRY: dict[str, dict[str, object]] = {
     "gpu_vram_pct_max":        {"segment": "gpu", "higher_is_better": False, "noise_metric": True,  "display_order": 10, "unit": "%"},
 
     # Memory Metrics
-
-    # Resident Memory Metrics
-    "rss_mb_mean":   {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 1, "unit": "MB"},
-    "rss_mb_median": {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 2, "unit": "MB"},
-    "rss_mb_stddev": {"segment": "memory", "higher_is_better": False, "noise_metric": True,  "display_order": 3, "unit": "MB"},
-    "rss_mb_min":    {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 4, "unit": "MB"},
-    "rss_mb_max":    {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 5, "unit": "MB"},
-
-    # Virtual Memory Metrics
-    "vms_mb_mean":   {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 6,  "unit": "MB"},
-    "vms_mb_median": {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 7,  "unit": "MB"},
-    "vms_mb_stddev": {"segment": "memory", "higher_is_better": False, "noise_metric": True,  "display_order": 8,  "unit": "MB"},
-    "vms_mb_min":    {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 9,  "unit": "MB"},
-    "vms_mb_max":    {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 10, "unit": "MB"},
-
-    # System Metrics
-    "total_page_faults":      {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 1,  "unit": "faults"},
-    "total_minor_faults":     {"segment": "system", "higher_is_better": False, "noise_metric": True,  "display_order": 2,  "unit": "faults"},
-    "total_major_faults":     {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 3,  "unit": "faults"},
-    "page_fault_mean":        {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 4,  "unit": "faults"},
-    "page_fault_median":      {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 5,  "unit": "faults"},
-    "page_fault_stddev":      {"segment": "system", "higher_is_better": False, "noise_metric": True,  "display_order": 6,  "unit": "faults"},
-    "page_fault_min":         {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 7,  "unit": "faults"},
-    "page_fault_max":         {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 8,  "unit": "faults"},
-    "minor_fault_mean":       {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 9,  "unit": "faults"},
-    "minor_fault_median":     {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 11, "unit": "faults"},
-    "minor_fault_stddev":     {"segment": "system", "higher_is_better": False, "noise_metric": True,  "display_order": 12, "unit": "faults"},
-    "minor_fault_min":        {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 13, "unit": "faults"},
-    "minor_fault_max":        {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 14, "unit": "faults"},
-    "major_fault_mean":       {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 15, "unit": "faults"},
-    "major_fault_median":     {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 16, "unit": "faults"},
-    "major_fault_stddev":     {"segment": "system", "higher_is_better": False, "noise_metric": True,  "display_order": 17, "unit": "faults"},
-    "major_fault_min":        {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 18, "unit": "faults"},
-    "major_fault_max":        {"segment": "system", "higher_is_better": False, "noise_metric": False, "display_order": 19, "unit": "faults"},
+    "total_page_faults":  {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 1,  "unit": "faults"},
+    "total_minor_faults": {"segment": "memory", "higher_is_better": False, "noise_metric": True,  "display_order": 2,  "unit": "faults"},
+    "total_major_faults": {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 3,  "unit": "faults"},
+    "rss_mb_mean":        {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 4,  "unit": "MB"},
+    "rss_mb_median":      {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 5,  "unit": "MB"},
+    "rss_mb_stddev":      {"segment": "memory", "higher_is_better": False, "noise_metric": True,  "display_order": 6,  "unit": "MB"},
+    "rss_mb_min":         {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 7,  "unit": "MB"},
+    "rss_mb_max":         {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 8,  "unit": "MB"},
+    "vms_mb_mean":        {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 9,  "unit": "MB"},
+    "vms_mb_median":      {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 10, "unit": "MB"},
+    "vms_mb_stddev":      {"segment": "memory", "higher_is_better": False, "noise_metric": True,  "display_order": 11, "unit": "MB"},
+    "vms_mb_min":         {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 12, "unit": "MB"},
+    "vms_mb_max":         {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 13, "unit": "MB"},
+    "page_fault_mean":    {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 14, "unit": "faults"},
+    "page_fault_median":  {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 15, "unit": "faults"},
+    "page_fault_stddev":  {"segment": "memory", "higher_is_better": False, "noise_metric": True,  "display_order": 16, "unit": "faults"},
+    "page_fault_min":     {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 17, "unit": "faults"},
+    "page_fault_max":     {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 18, "unit": "faults"},
+    "minor_fault_mean":   {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 19, "unit": "faults"},
+    "minor_fault_median": {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 20, "unit": "faults"},
+    "minor_fault_stddev": {"segment": "memory", "higher_is_better": False, "noise_metric": True,  "display_order": 21, "unit": "faults"},
+    "minor_fault_min":    {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 22, "unit": "faults"},
+    "minor_fault_max":    {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 23, "unit": "faults"},
+    "major_fault_mean":   {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 24, "unit": "faults"},
+    "major_fault_median": {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 25, "unit": "faults"},
+    "major_fault_stddev": {"segment": "memory", "higher_is_better": False, "noise_metric": True,  "display_order": 26, "unit": "faults"},
+    "major_fault_min":    {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 27, "unit": "faults"},
+    "major_fault_max":    {"segment": "memory", "higher_is_better": False, "noise_metric": False, "display_order": 28, "unit": "faults"},
 
     # Startup Metrics
     "linker_total_cycles":    {"segment": "startup", "higher_is_better": False, "noise_metric": False, "display_order": 1, "unit": "cycles"},
