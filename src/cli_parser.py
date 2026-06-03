@@ -53,6 +53,11 @@ Core Structural Rules:
 """
 
 import argparse
+from typing import TypeAlias
+
+MetricSelection: TypeAlias = list[str]
+ReportFormats:   TypeAlias = list[str]
+VisualFormats:   TypeAlias = list[str]
 
 def parse_args() -> argparse.Namespace:
     parser = create_cli_parser()
@@ -144,7 +149,7 @@ def add_options(parser: argparse.ArgumentParser) -> None:
         help   = 'show this help message and exit'
     )
 
-def parse_metrics(metrics_str: str) -> list[str]:
+def parse_metrics(metrics_str: str) -> MetricSelection:
     valid   = {'wall-time', 'cpu', 'gpu', 'memory', 'thread'}
     metrics = [m.strip() for m in metrics_str.split(',')]
 
@@ -156,7 +161,7 @@ def parse_metrics(metrics_str: str) -> list[str]:
 
     return metrics
 
-def parse_report_formats(formats_str: str) -> list[str]:
+def parse_report_formats(formats_str: str) -> ReportFormats:
     valid   = {'csv', 'json', 'md'}
     formats = [f.strip() for f in formats_str.split(',')]
 
@@ -168,7 +173,7 @@ def parse_report_formats(formats_str: str) -> list[str]:
 
     return formats
 
-def parse_visual_formats(formats_str: str) -> list[str]:
+def parse_visual_formats(formats_str: str) -> VisualFormats:
     valid   = {'table', 'chart', 'graph'}
     formats = [f.strip() for f in formats_str.split(',')]
 

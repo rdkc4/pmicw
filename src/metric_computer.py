@@ -17,12 +17,8 @@ from measurement import (
 from itertools import chain
 from statistics import mean, median, stdev
 from collections import defaultdict
+from record_types import FlatRecords, RecordGroup, RecordList
 from workload_context import WorkloadMetricSelection
-
-Record      = dict[str, float]
-RecordList  = list[Record]
-RecordGroup = dict[str, RecordList]
-FlatRecords = dict[str, list[float]]
 
 def compute_metrics(selected_metrics: WorkloadMetricSelection, record_groups: RecordGroup) -> Metrics:
     flat_metrics       = extract_metrics_from_groups(record_groups)
@@ -93,7 +89,6 @@ def compute_task_clock_metrics(records: FlatRecords) -> TaskClockMetric:
         task_clock_total_ms = sum(task_clock_values),
         task_clock_stats_ms = compute_stats_metrics(task_clock_values)
     )
-
 
 def compute_branch_prediction_metrics(records: FlatRecords) -> BranchPredictionMetric:
     total_branch_miss, total_branch, branch_miss_rate_stats = compute_ratio_metrics(records, "branch-misses", "branches")

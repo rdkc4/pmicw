@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 import threading
 
+from record_types import RecordGroup
+
 @dataclass
 class WorkloadMonitors:
     active_pid:     list[int]
@@ -24,5 +26,5 @@ class WorkloadContext:
     selected_metrics:  WorkloadMetricSelection
     command:           list[str]
     env:               dict[str, str]
-    records:           dict[str, list[dict[str, float]]]
+    records:           RecordGroup
     monitors:          WorkloadMonitors

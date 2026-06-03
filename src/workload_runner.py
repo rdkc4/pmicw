@@ -16,7 +16,7 @@ Asynchronous Thread Coordination Model:
        |->| Loop: Iteration                  |
        |  |--> activity_event.set() -------->| (Wake up & sample hardware)
        |  |--> subprocess.Popen(workload)    | (Active Execution)
-       |  |--> sample rss and vms            |
+       |  |                                  |
        |  |--> activity_event.clear() ------>| (Pause sampling)
        |--|
           |
@@ -45,7 +45,11 @@ from metric_computer import compute_metrics
 from metric_monitor import monitor_amd_gpu, monitor_process_memory, monitor_process_threads, spawn_monitor_daemon
 from record_parser import parse_cpu_prof_output
 from csv_writer import write
+from record_types import RecordList
 from workload_context import WorkloadContext, WorkloadMetricSelection, WorkloadMonitors
+from typing import TypeAlias
+
+WorkloadMetrics: TypeAlias = tuple[RecordList, RecordList, RecordList, RecordList, RecordList]
 
 @dataclass
 class PerfGroupConfig:
@@ -135,16 +139,16 @@ def warmup_workload(command: list[str], warmup_iterations: int = 0) -> None:
         subprocess.run(command)
 
 def execute_workload(
-    command:         list[str],
-    ctx:             WorkloadContext,
-    env:             dict[str, str] | None = None
-) -> tuple[list[dict[str, float]], list[dict[str, float]], list[dict[str, float]], list[dict[str, float]], list[dict[str, float]]]:
+    command: list[str],
+    ctx:     WorkloadContext,
+    env:     dict[str, str] | None = None
+) -> WorkloadMetrics:
     
-    wall_times:     list[dict[str, float]] = []
-    perf_records:   list[dict[str, float]] = []
-    memory_records: list[dict[str, float]] = []
-    link_records:   list[dict[str, float]] = []
-    thread_records: list[dict[str, float]] = []
+    wall_times:     RecordList = []
+    perf_records:   RecordList = []
+    memory_records: RecordList = []
+    link_records:   RecordList = []
+    thread_records: RecordList = []
 
     for _ in range(ctx.iterations):
         start = time.perf_counter()

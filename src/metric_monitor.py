@@ -5,6 +5,7 @@ from typing import Callable
 import psutil
 
 from record_parser import parse_rocm_smi_output
+from record_types import RecordList
 
 def spawn_monitor_daemon(
     target:  Callable,
@@ -25,7 +26,7 @@ def monitor_process_threads(
     shutdown_event: threading.Event,
     interval:       float,
     active_pid_ref: list[int],
-    thread_records: list[dict[str, float]]
+    thread_records: RecordList
 ) -> None:
 
     while not shutdown_event.is_set():
@@ -56,7 +57,7 @@ def monitor_process_memory(
     shutdown_event: threading.Event,
     interval:       float,
     active_pid_ref: list[int],
-    memory_records: list[dict[str, float]]
+    memory_records: RecordList
 ) -> None:
 
     while not shutdown_event.is_set():
@@ -87,7 +88,7 @@ def monitor_amd_gpu(
     activity_event: threading.Event, 
     shutdown_event: threading.Event, 
     interval:       float, 
-    gpu_records:    list[dict[str, float]],
+    gpu_records:    RecordList,
     device_index:   int = 0
 ):
     try:

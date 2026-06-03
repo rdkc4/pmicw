@@ -1,7 +1,14 @@
 import json
 import re
 
-def parse_cpu_prof_output(perf_output: str, pid: int) -> tuple[dict[str, float], dict[str, float]]:
+from record_types import Record
+from typing import TypeAlias
+
+PerfRecord:    TypeAlias = Record
+LDRecord:      TypeAlias = Record
+ROCMSMIRecord: TypeAlias = Record
+
+def parse_cpu_prof_output(perf_output: str, pid: int) -> tuple[PerfRecord, LDRecord]:
     perf_json_records = []
     ld_records        = []
 
@@ -23,8 +30,8 @@ def parse_cpu_prof_output(perf_output: str, pid: int) -> tuple[dict[str, float],
 
     return parsed_perf, dynamic_link_cycles
 
-def parse_perf_json_records(perf_json_records: list[dict]) -> dict[str, float]:
-    metrics: dict[str, float] = {}
+def parse_perf_json_records(perf_json_records: list[dict]) -> PerfRecord:
+    metrics: PerfRecord = {}
 
     for record in perf_json_records:
         event = record.get("event")
@@ -38,7 +45,7 @@ def parse_perf_json_records(perf_json_records: list[dict]) -> dict[str, float]:
 
     return metrics
 
-def parse_ld_records(ld_records: list[str]) -> dict[str, float]:
+def parse_ld_records(ld_records: list[str]) -> LDRecord:
     pattern = re.compile(r"total startup time in dynamic loader:\s*(\d+)\s*cycles")
 
     for record in reversed(ld_records):
@@ -47,8 +54,9 @@ def parse_ld_records(ld_records: list[str]) -> dict[str, float]:
             return {'ld': float(match.group(1))}
     return {}
 
-def parse_rocm_smi_output(rocm_smi_output: str, device_index: int) -> dict[str, float]:
+def parse_rocm_smi_output(rocm_smi_output: str, device_index: int) -> ROCMSMIRecord:
     json_start = rocm_smi_output.find("{")
+
     if(json_start != -1):
         rocm_smi_output = rocm_smi_output[json_start:]
         data            = json.loads(rocm_smi_output)
@@ -61,7 +69,7 @@ def parse_rocm_smi_output(rocm_smi_output: str, device_index: int) -> dict[str, 
         "vram_pct":         0.0
     }
 
-def parse_rocm_smi_json_record(rocm_smi_record: dict) -> dict[str, float]:
+def parse_rocm_smi_json_record(rocm_smi_record: dict) -> ROCMSMIRecord:
     return {
         "gfx_activity_pct": float(rocm_smi_record.get("GPU use (%)", "0")),
         "vram_pct":         float(rocm_smi_record.get("GPU Memory Allocated (VRAM%)", "0"))
