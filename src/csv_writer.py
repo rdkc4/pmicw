@@ -1,3 +1,4 @@
+import hashlib
 import re
 from pathlib import Path
 from typing import Sequence
@@ -6,23 +7,28 @@ from measurement import Measurement
 
 DATA_DIR = Path.cwd() / "data"
 
-def repo_to_filename(repository: str) -> str:
+def repo_to_filename(repository: str, header: str) -> str:
+    filename = ""
     if not repository or repository == "N/A":
-        return "measurements.csv"
+        filename = "measurements"
+    else:
+        parts = repository.replace("\\", "/").replace(":", "/").rstrip("/").split("/")
+        parts = [part for part in parts if part]
 
-    parts = repository.replace("\\", "/").replace(":", "/").rstrip("/").split("/")
-    parts = [part for part in parts if part]
+        if len(parts) < 2:
+            return "measurements.csv"
 
-    if len(parts) < 2:
-        return "measurements.csv"
+        account, repo = parts[-2], parts[-1]
+        repo          = re.sub(r"\.git$", "", repo, flags = re.IGNORECASE)
+        filename      = f"{account}_{repo}"
 
-    account, repo = parts[-2], parts[-1]
-    repo          = re.sub(r"\.git$", "", repo, flags = re.IGNORECASE)
+    header_hash = generate_header_hash(header)
+    filename = f"{filename}_{header_hash}"
 
-    file_name = re.sub(r"[^\w\-]", "_", f"{account}__{repo}")
-    file_name = re.sub(r"_+", "_", file_name).strip("_")
+    filename = re.sub(r"[^\w\-]", "_", filename)
+    filename = re.sub(r"_+", "_", filename).strip("_")
 
-    return f"{file_name or 'measurements'}.csv"
+    return f"{filename or 'measurements'}.csv"
 
 
 def resolve(filename: str, data_dir: Path) -> Path:
@@ -36,13 +42,18 @@ def ensure_dir(path: Path) -> None:
 def needs_header(path: Path) -> bool:
     return not path.exists() or path.stat().st_size == 0
 
+def generate_header_hash(header_string: str) -> str:
+    if not header_string:
+        return "empty"
+
+    return hashlib.md5(header_string.encode("utf-8")).hexdigest()[:8]
 
 def write(
     measurement: Measurement,
     data_dir:    str | Path = DATA_DIR,
     encoding:    str        = "utf-8",
 ) -> Path | None:
-    filename = repo_to_filename(measurement.metadata.version.repository)
+    filename = repo_to_filename(measurement.metadata.version.repository, measurement.to_csv_header())
     path     = resolve(filename, Path(data_dir))
     ensure_dir(path)
 
@@ -70,7 +81,7 @@ def write_batch(
         path = resolve("measurements.csv", Path(data_dir))
         return path, 0, 0
 
-    filename = repo_to_filename(measurements[0].metadata.version.repository)
+    filename = repo_to_filename(measurements[0].metadata.version.repository, measurements[0].to_csv_header())
     path     = resolve(filename, Path(data_dir))
     ensure_dir(path)
 
