@@ -71,8 +71,8 @@ segments:
       - name: l2_llc_caches
         use_ld_env: false
         events:
-          - l2_rqsts.references
-          - l2_rqsts.miss
+          - l2_cache_req_stat.all
+          - l2_cache_req_stat.ic_dc_miss_in_l2
           - cache-references
           - cache-misses
 
