@@ -59,6 +59,10 @@ MetricSelection: TypeAlias = list[str]
 ReportFormats:   TypeAlias = list[str]
 VisualFormats:   TypeAlias = list[str]
 
+METRICS        = {'wall-time', 'cpu', 'gpu', 'memory', 'thread'}
+REPORT_FORMATS = {'csv', 'md', 'json'}
+VISUAL_FORMATS = {'table', 'chart', 'graph'}
+
 def parse_args() -> argparse.Namespace:
     parser = create_cli_parser()
     return parser.parse_args()
@@ -150,10 +154,9 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     )
 
 def parse_metrics(metrics_str: str) -> MetricSelection:
-    valid   = {'wall-time', 'cpu', 'gpu', 'memory', 'thread'}
     metrics = [m.strip() for m in metrics_str.split(',')]
 
-    invalid = set(metrics) - valid
+    invalid = set(metrics) - METRICS
     if invalid:
         raise argparse.ArgumentTypeError(
             f'invalid metrics: {", ".join(sorted(invalid))}'
@@ -162,10 +165,9 @@ def parse_metrics(metrics_str: str) -> MetricSelection:
     return metrics
 
 def parse_report_formats(formats_str: str) -> ReportFormats:
-    valid   = {'csv', 'json', 'md'}
     formats = [f.strip() for f in formats_str.split(',')]
 
-    invalid = set(formats) - valid
+    invalid = set(formats) - REPORT_FORMATS
     if invalid:
         raise argparse.ArgumentTypeError(
             f'invalid report formats: {", ".join(sorted(invalid))}'
@@ -174,10 +176,9 @@ def parse_report_formats(formats_str: str) -> ReportFormats:
     return formats
 
 def parse_visual_formats(formats_str: str) -> VisualFormats:
-    valid   = {'table', 'chart', 'graph'}
     formats = [f.strip() for f in formats_str.split(',')]
 
-    invalid = set(formats) - valid
+    invalid = set(formats) - VISUAL_FORMATS
     if invalid:
         raise argparse.ArgumentTypeError(
             f'invalid visual formats: {", ".join(sorted(invalid))}'

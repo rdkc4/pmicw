@@ -193,11 +193,3 @@ segments:
         type: derived
         # fraction of CPU time actually used, normalised per thread
         formula: (task_clock_ms_mean / wall_time_ms_mean) / thread_count_mean * 100
-
-record_groups:
-  wall_time: {}
-  perf:      {}
-  gpu:       {}
-  memory:    {}
-  thread:    {}
-  ld:        {}

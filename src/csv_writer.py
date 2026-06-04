@@ -81,7 +81,10 @@ def write_batch(
         path = resolve("measurements.csv", Path(data_dir))
         return path, 0, 0
 
-    filename = repo_to_filename(measurements[0].metadata.version.repository, measurements[0].to_csv_header())
+    filename = repo_to_filename(
+        measurements[0].metadata.version.repository, 
+        measurements[0].to_csv_header()
+    )
     path     = resolve(filename, Path(data_dir))
     ensure_dir(path)
 

@@ -1,12 +1,55 @@
+from dataclasses import dataclass
 import subprocess
 import threading
 import time
 from typing import Callable
 import psutil
 
-from metrics_config import SegmentConfig
+from metrics_config import ProfilerConfig, SegmentConfig, Segments
 from record_parser import parse_rocm_smi_output
 from record_types import Record, RecordList
+from workload_context import WorkloadContext
+
+@dataclass
+class MonitorSpecification:
+    target:    Callable
+    needs_pid: bool
+
+def get_monitors() -> dict[Segments, MonitorSpecification]:
+    return {
+        Segments.THREAD: MonitorSpecification(target = monitor_process_threads, needs_pid = True),
+        Segments.MEMORY: MonitorSpecification(target = monitor_process_memory,  needs_pid = True),
+        Segments.GPU:    MonitorSpecification(target = monitor_amd_gpu,         needs_pid = False)
+    }
+
+def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig):
+    monitors = get_monitors()
+
+    for segment, monitor in monitors.items():
+        if not getattr(ctx.selected_metrics, segment):
+            continue
+
+        cfg_segment = cfg.segments.get(segment)
+        if cfg_segment is None:
+            print(f"Segment '{segment}' not found in config")
+            continue
+
+        args = [
+            ctx.monitors.activity_event,
+            ctx.monitors.shutdown_event,
+            ctx.records[segment],
+            cfg_segment,
+            ctx.monitors.interval,
+        ]
+
+        if monitor.needs_pid:
+            args.append(ctx.monitors.active_pid)
+
+        spawn_monitor_daemon(
+            target  = monitor.target,
+            args    = tuple(args),
+            daemons = ctx.monitors.daemon_threads,
+        )
 
 def spawn_monitor_daemon(
     target:  Callable,
@@ -25,10 +68,10 @@ def spawn_monitor_daemon(
 def monitor_process_threads(
     activity_event: threading.Event,
     shutdown_event: threading.Event,
+    thread_records: RecordList,
+    segment_config: SegmentConfig,
     interval:       float,
     active_pid_ref: list[int],
-    thread_records: RecordList,
-    segment_config: SegmentConfig
 ) -> None:
 
     events = segment_config.read_keys_for_target(psutil.Process)
@@ -63,10 +106,10 @@ def monitor_process_threads(
 def monitor_process_memory(
     activity_event: threading.Event,
     shutdown_event: threading.Event,
-    interval:       float,
-    active_pid_ref: list[int],
     memory_records: RecordList,
-    segment_config: SegmentConfig
+    segment_config: SegmentConfig,
+    interval:       float,
+    active_pid_ref: list[int]
 ) -> None:
     
     events = segment_config.read_keys_for_target(psutil._ntp.pfullmem)
@@ -100,9 +143,9 @@ def monitor_process_memory(
 def monitor_amd_gpu(
     activity_event: threading.Event, 
     shutdown_event: threading.Event, 
-    interval:       float, 
     gpu_records:    RecordList,
     segment_config: SegmentConfig,
+    interval:       float, 
     device_index:   int = 0
 ) -> None:
     

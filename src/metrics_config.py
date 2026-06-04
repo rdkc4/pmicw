@@ -22,12 +22,22 @@ import ast
 import re
 from dataclasses import dataclass, field
 from typing import Literal
+from enum import StrEnum
 
 import yaml
 
 TotalsSpec = list[Literal["numerator", "denominator"]]
 
 STATS_SUFFIX = ["mean", "median", "stddev", "min", "max"]
+
+class Segments(StrEnum):
+    WALL_TIME = "wall_time"
+    CPU       = "cpu"
+    GPU       = "gpu"
+    MEMORY    = "memory"
+    THREAD    = "thread"
+    LD        = "ld"
+    PERF      = "perf"
 
 @dataclass
 class RatioMetric:
@@ -136,7 +146,6 @@ class SegmentConfig:
 
 @dataclass
 class ProfilerConfig:
-    record_groups: list[str]
     segments:      dict[str, SegmentConfig]
 
     def csv_fields(self) -> list[str]:
@@ -154,6 +163,12 @@ class ProfilerConfig:
                     result.append((seg_name, m))
 
         return result
+    
+@dataclass
+class PerfGroupConfig:
+    name:   str
+    events: list[str]
+    env:    dict[str, str] | None
 
 SAFE_BUILTINS = {"abs", "round", "min", "max", "sum"}
 
@@ -161,8 +176,7 @@ def load_config(path: str = "metrics.yaml") -> ProfilerConfig:
     with open(path) as f:
         raw = yaml.safe_load(f)
 
-    segments:      dict[str, SegmentConfig] = {}
-    record_groups: list[str]                = []
+    segments: dict[str, SegmentConfig] = {}
 
     for seg_name, seg_raw in raw.get("segments", {}).items():
         perf_groups = [
@@ -184,10 +198,7 @@ def load_config(path: str = "metrics.yaml") -> ProfilerConfig:
             perf_groups = perf_groups,
         )
 
-    for group in raw.get('record_groups', []):
-        record_groups.append(group)
-
-    cfg = ProfilerConfig(record_groups = record_groups, segments = segments)
+    cfg = ProfilerConfig(segments)
     validate_derived(cfg)
     return cfg
 
