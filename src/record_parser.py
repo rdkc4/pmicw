@@ -6,7 +6,7 @@ from typing import TypeAlias
 
 PerfRecord:    TypeAlias = Record
 LDRecord:      TypeAlias = Record
-ROCMSMIRecord: TypeAlias = Record
+ROCMSMIRecord: TypeAlias = dict
 
 def parse_cpu_prof_output(perf_output: str, pid: int) -> tuple[PerfRecord, LDRecord]:
     perf_json_records = []
@@ -59,18 +59,14 @@ def parse_rocm_smi_output(rocm_smi_output: str, device_index: int) -> ROCMSMIRec
 
     if(json_start != -1):
         rocm_smi_output = rocm_smi_output[json_start:]
-        data            = json.loads(rocm_smi_output)
-        gpu_data        = data.get(f"card{device_index}", {})
+        data = {}
+        try:
+            data = json.loads(rocm_smi_output)
 
-        return parse_rocm_smi_json_record(gpu_data)
+        except json.JSONDecodeError:
+            pass
 
-    return {
-        "gfx_activity_pct": 0.0,
-        "vram_pct":         0.0
-    }
-
-def parse_rocm_smi_json_record(rocm_smi_record: dict) -> ROCMSMIRecord:
-    return {
-        "gfx_activity_pct": float(rocm_smi_record.get("GPU use (%)", "0")),
-        "vram_pct":         float(rocm_smi_record.get("GPU Memory Allocated (VRAM%)", "0"))
-    }
+        gpu_data = data.get(f"card{device_index}", {})
+        return gpu_data
+    
+    return {}

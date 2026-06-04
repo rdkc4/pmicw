@@ -9,17 +9,18 @@ def write_report(df: pd.DataFrame, report_formats: list[str], report_path: str) 
     grouped     = df.groupby(["baseline_run", "contender_run"], sort = False)
 
     for (baseline, contender), group in grouped:
+        clean_group = group.replace([np.nan, np.inf, -np.inf], None)
+        first_row   = clean_group.iloc[0] if not clean_group.empty else {}
+
         run_payload = {
             "baseline_run_id":  baseline,
+            "baseline_args":    first_row.get("baseline_args", "N/A"),
             "contender_run_id": contender,
+            "contender_args":   first_row.get("contender_args", "N/A"),
+            "workload_name":    first_row.get("workload_name", "N/A"),
             "timestamp":        str(group["timestamp"].iloc[0]) if "timestamp" in group.columns else None,
-            "segments":         {}
-        }
-        
-        for segment, segment_df in group.groupby("segment", observed = True):
-            segment_df = segment_df.replace([np.nan, np.inf, -np.inf], None)
-            run_payload["segments"][str(segment)] = segment_df.to_dict(orient = "records")
-            
+            "metrics":          clean_group.to_dict(orient = "records")
+        }   
         report_data["comparisons"].append(run_payload)
 
     REPORT_DIR.mkdir(parents = True, exist_ok = True)
@@ -44,20 +45,21 @@ def write_json_report(report_data: dict, output_path: Path) -> None:
 def write_md_report(report_data: dict, output_path: Path) -> None:
     lines = []
     for comparison in report_data["comparisons"]:
-            lines.append("## Report:")
-            lines.append(f"### Baseline Run ID:  {comparison['baseline_run_id']}")
-            lines.append(f"### Contender Run ID: {comparison['contender_run_id']}")
-            lines.append(f"### Timestamp:        {comparison['timestamp']}")
+        lines.append("## Report:")
+        lines.append(f"### Workload:         {comparison['workload_name']}")
+        lines.append(f"### Timestamp:        {comparison['timestamp']}")
+        lines.append(f"### Baseline Run ID:  {comparison['baseline_run_id']} (Args: {comparison['baseline_args']})")
+        lines.append(f"### Contender Run ID: {comparison['contender_run_id']} (Args: {comparison['contender_args']})")
+        lines.append("")
 
-            for segment, records in comparison["segments"].items():
-                lines.append(f"#### {segment}")
-                
-                segment_df     = pd.DataFrame(records)
-                display_cols   = ["metric", "baseline_val", "contender_val", "delta_abs", "delta_pct", "unit"]
-                available_cols = [col for col in display_cols if col in segment_df.columns]
+        metrics_df = pd.DataFrame(comparison["metrics"])
+        
+        if not metrics_df.empty:
+            display_cols   = ["metric", "baseline_val", "contender_val", "delta_abs", "delta_pct", "unit"]
+            available_cols = [col for col in display_cols if col in metrics_df.columns]
 
-                lines.append(segment_df[available_cols].to_markdown(index = False))
-                lines.append("")
+            lines.append(metrics_df[available_cols].to_markdown(index = False))
+            lines.append("")
         
     output_path.write_text(
         "\n".join(lines),

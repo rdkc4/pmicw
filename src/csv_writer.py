@@ -49,7 +49,7 @@ def write(
     try:
         with path.open("a", encoding = encoding, newline = "") as f:
             if needs_header(path):
-                f.write(Measurement.to_csv_header() + "\n")
+                f.write(measurement.to_csv_header() + "\n")
 
             f.write(measurement.data_to_csv() + "\n")
 
@@ -80,7 +80,7 @@ def write_batch(
     try:
         with path.open("a", encoding = encoding, newline = "") as f:
             if needs_header(path):
-                f.write(Measurement.to_csv_header() + "\n")
+                f.write(measurements[0].to_csv_header() + "\n")
 
             for measurement in measurements:
                 try:

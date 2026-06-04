@@ -1,147 +1,61 @@
 """
-Data Structures and Telemetry Schema Module.
+Data Structures and Telemetry Schema Module
 
-This module defines the complete structural contract for the profiler's data layer,
-handling environment state collection, metadata tracking, and target workload metrics.
+This module defines the structural contract for the profiler's data layer,
+handling environment state collection, metadata tracking, workload configuration,
+and target workload metrics.
 
-Data Model Hierarchy Map:
-    Measurement
-    |-> Metadata
-    |   |-> Run ID
-    |   |-> Timestamp
-    |   |-> Version
-    |   |   |-> Git Repository URL
-    |   |   |-> Active Branch Name
-    |   |   |-> Current Commit Hash
-    |   |
-    |   |-> SoftwareInfo
-    |   |   |-> OSInfo
-    |   |   |   |-> OS Name
-    |   |   |   |-> OS Version
-    |   |
-    |   |-> HardwareInfo
-    |   |   |-> CPUInfo
-    |   |   |   |-> Model Name
-    |   |   |   |-> Architecture
-    |   |   |   |-> Physical Cores
-    |   |   |   |-> Logical Cores
-    |   |   |   |-> Max Frequency
-    |   |   |
-    |   |   |-> GPUInfo
-    |   |   |   |-> Model Name
-    |   |   |   |-> Target Architecture
-    |   |   |   |-> Total VRAM
-    |   |   |   |-> Used VRAM
-    |   |   |
-    |   |   |-> MemoryInfo
-    |   |   |   |-> Total MEM
-    |   |   |   |-> Available MEM
-    |   |   |   |-> Used MEM
-    |   |   |   |-> Free MEM
-    |   |   |   |-> Total SWP
-    |   |   |   |-> Used SWP
-    |   |   |   |-> Free SWP
-    |
-    |-> Workload
-    |   |-> Name
-    |   |-> Iterations
-    |   |-> Warmup Iterations
-    |   |-> Arguments
-    |
-    |-> Metrics
-    |   |-> WallTimeMetric
-    |   |   |-> wall_time_total_ms
-    |   |   |-> wall_time_stats_ms (mean, median, stddev, min, max)
-    |   |   
-    |   |-> CPUMetric
-    |   |   |-> IPCMetric
-    |   |   |   |-> total_instructions
-    |   |   |   |-> total_cycles
-    |   |   |   |-> ipc_stats (mean, median, stddev, min, max)
-    |   |   |
-    |   |   |-> TaskClockMetric
-    |   |   |   |-> task_clock_total_ms
-    |   |   |   |-> task_clock_stats_ms (mean, median, stddev, min, max)
-    |   |   |   
-    |   |   |-> L1CacheMetric
-    |   |   |   |-> l1d_total_accesses
-    |   |   |   |-> l1d_total_misses
-    |   |   |   |-> l1i_total_accesses
-    |   |   |   |-> l1i_total_misses
-    |   |   |   |-> l1d_miss_rate_stats_pct (mean, median, stddev, min, max)
-    |   |   |   |-> l1i_miss_rate_stats_pct (mean, median, stddev, min, max)
-    |   |   |
-    |   |   |-> L2CacheMetric
-    |   |   |   |-> l2_total_accesses
-    |   |   |   |-> l2_total_misses
-    |   |   |   |-> l2_miss_rate_stats_pct (mean, median, stddev, min, max)
-    |   |   |
-    |   |   |-> LLCacheMetric
-    |   |   |   |-> llc_total_accesses
-    |   |   |   |-> llc_total_misses
-    |   |   |   |-> llc_miss_rate_stats_pct (mean, median, stddev, min, max)
-    |   |   |
-    |   |   |-> BranchPredictionMetric
-    |   |   |   |-> total_branches
-    |   |   |   |-> total_branch_misses
-    |   |   |   |-> branch_miss_rate_stats_pct (mean, median, stddev, min, max)
-    |   |
-    |   |-> GPUMetric
-    |   |   |-> activity_stats_pct (mean, median, stddev, min, max)
-    |   |   |-> vram_stats_pct (mean, median, stddev, min, max)
-    |   |
-    |   |-> MemoryMetric
-    |   |   |-> total_page_faults
-    |   |   |-> total_minor_faults
-    |   |   |-> total_major_faults
-    |   |   |-> rss_stats_mb (mean, median, stddev, min, max)
-    |   |   |-> vms_stats_mb (mean, median, stddev, min, max)
-    |   |   |-> page_faults_stats (mean, median, stddev, min, max)
-    |   |   |-> minor_faults_stats (mean, median, stddev, min, max)
-    |   |   |-> major_faults_stats (mean, median, stddev, min, max)
-    |   |
-    |   |-> StartupMetric
-    |   |   |-> total_link_cycles
-    |   |   |-> startup_time_stats_ms (mean, median, stddev, min, max)
-    |   |
-    |   |-> ThreadMetric
-    |   |   |-> total_context_switches
-    |   |   |-> context_switches_stats (mean, median, stddev, min, max)
-    |   |   |-> thread_count_stats (mean, median, stddev, min, max)
-    |   |   |-> thread_utilization_stats (mean, median, stddev, min, max)
+Key Components:
 
+1. Version
+   - Captures Git repository context: repository URL, branch, commit hash.
+   - Falls back gracefully to "N/A" if not in a Git repository.
 
-CSV Schema Overview
+2. OSInfo & SoftwareInfo
+   - OSInfo: Provides operating system name and version via `platform`.
+   - SoftwareInfo: Aggregates OSInfo.
 
-Columns are flattened and ordered as:
- - Metadata (run_id, timestamp)
- - Version (repository, branch, commit)
- - OS info (os_name, os_version)
- - CPU info (cpu_model, cpu_architecture, cpu_physical_cores, cpu_logical_cores, cpu_frequency)
- - GPU info (gpu_model, gpu_target, gpu_vram_total_mb, gpu_vram_used_mb)
- - Memory info (mem_total_mb, mem_available_mb, mem_used_mb, mem_free_mb, swp_total_mb, swp_used_mb, swp_free_mb)
- - Workload (workload_name, workload_iterations, workload_warmup_iterations, workload_arguments); 
-            workload arguments are wrapped in quotes and separated by space: "arg1 arg2"
- - WallTime metric (wall_time_total_ms, wall_time_ms_(stats))
- - IPC metric (total_instructions, total_cycles, ipc_(stats))
- - TaskClock metric (task_clock_total_ms, task_clock_ms_(stats))
- - L1C metric (l1d_total_accesses, l1d_total_misses, l1i_total_accesses, l1i_total_misses, 
-               l1d_miss_rate_pct_(stats), l1i_miss_rate_pct_(stats))
- - L2C metric (l2_total_accesses, l2_total_misses, l2_miss_rate_pct_(stats))
- - LLC metric (llc_total_accesses, llc_total_misses, llc_miss_rate_pct_(stats))
- - Branch metric (total_branches, total_branch_misses, branch_miss_rate_pct_(stats))
- - GPU metric (gpu_activity_pct_(stats), gpu_vram_pct_(stats))
- - Memory metric (rss_mb_(stats), vms_mb_(stats))
- - System metric (total_page_faults, total_minor_faults, total_major_faults, 
-                  page_faults_(stats), minor_faults_(stats), major_faults_(stats))
- - Startup metric (linker_total_cycles, startup_time_ms_(stats))
- - Thread metric (total_context_switches, context_switches_(stats), thread_count_(stats), thread_utilization_(stats))
- - Note: (stats) has values: {mean, median, stddev, min, max}
- 
-Column/Row generation:
- - Columns are generated using Measurement.to_csv_header()
- - Rows are generated using Measurement.data_to_csv()
- - Warning: reordering of to_csv_header() and data_to_csv() calls can break existing csv datasets
+3. CPUInfo, GPUInfo, MemoryInfo
+   - CPUInfo: Captures CPU model, architecture, physical/logical cores, max frequency.
+   - GPUInfo: Probes AMD GPUs via `amdsmi` for model, target architecture, VRAM.
+   - MemoryInfo: Captures total, available, used, free RAM and swap memory in MB.
+
+4. HardwareInfo
+   - Aggregates CPUInfo, GPUInfo, and MemoryInfo.
+
+5. Metadata
+   - Tracks run_id (UUID), timestamp, Version, SoftwareInfo, HardwareInfo.
+
+6. Workload
+   - Tracks workload name, iterations, warmup iterations, and arguments.
+
+7. Metrics
+   - Wraps segment-specific metrics in a Record and supports CSV serialization.
+
+8. Measurement
+   - Combines Metadata, Workload, and Metrics for a full experiment snapshot.
+   - CSV output leverages ProfilerConfig to determine column order and segment fields.
+
+CSV Schema Overview:
+
+- Static columns: Metadata + Workload
+- Dynamic columns: Metrics per segment as defined in ProfilerConfig
+- Column order is strictly controlled by Measurement.to_csv_header() and Measurement.data_to_csv()
+- Metrics serialization:
+    - Metrics.data_to_csv(expected_fields) ensures alignment with CSV schema
+    - Empty fields are inserted if a metric segment is missing
+
+CSV Generation Example:
+
+header = measurement.to_csv_header()
+row    = measurement.data_to_csv()
+
+Notes:
+
+- The profiler supports dynamic segment configuration; the Measurement class
+  queries ProfilerConfig for the expected CSV fields, ensuring forward compatibility.
+- Reordering calls to to_csv_header() or data_to_csv() may break existing CSV datasets.
+- Metrics are flattened per segment; missing or unavailable fields result in empty CSV columns.
 """
 
 from dataclasses import dataclass
@@ -151,6 +65,9 @@ import uuid
 import psutil
 import cpuinfo
 import git
+
+from metrics_config import ProfilerConfig
+from record_types import Record
 
 class Version:
     """
@@ -356,267 +273,41 @@ class Workload:
     def data_to_csv(self) -> str:
         args_str = " ".join(self.arguments or [])
         return f"{self.name},{self.iterations},{self.warmup_iterations},\"{args_str}\""
-
-@dataclass
-class MetricStats:
-    """Core statistical results calculated over multiple workload iteration samples."""
-    mean_value:   float
-    median_value: float
-    stddev_value: float
-    min_value:    float
-    max_value:    float
-
-    @classmethod
-    def to_csv_header(cls, prefix: str) -> str:
-        return f"{prefix}_mean,{prefix}_median,{prefix}_stddev,{prefix}_min,{prefix}_max"
-
-    def data_to_csv(self) -> str:
-        return f"{self.mean_value},{self.median_value},{self.stddev_value},{self.min_value},{self.max_value}"
-
-@dataclass
-class WallTimeMetric:
-    """
-    Tracks latency metrics. 
-    wall_time_total_ms represents the baseline accumulation across iterations.
-    """
-    wall_time_total_ms: float
-    wall_time_stats_ms: MetricStats
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"wall_time_total_ms,{MetricStats.to_csv_header('wall_time_ms')}"
     
-    def data_to_csv(self) -> str:
-        return f"{self.wall_time_total_ms},{self.wall_time_stats_ms.data_to_csv()}"
-
-@dataclass
-class IPCMetric:
-    """
-    Hardware instructions-per-cycle profiling parameters extracted via perf hardware counters.
-    total_ipc represents the baseline accumulation across iterations.
-    """
-    total_instructions: int
-    total_cycles:       int
-    ipc_stats:          MetricStats
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"total_instructions,total_cycles,{MetricStats.to_csv_header('ipc')}"
-    
-    def data_to_csv(self) -> str:
-        return f"{self.total_instructions},{self.total_cycles},{self.ipc_stats.data_to_csv()}"
-
-@dataclass
-class TaskClockMetric:
-    """
-    CPU time consumed by the profiled task, measured via perf task-clock events.
-    task_clock_total_ms represents the accumulated task-clock time across all iterations.
-    """
-    task_clock_total_ms: float
-    task_clock_stats_ms: MetricStats
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"task_clock_total_ms,{MetricStats.to_csv_header('task_clock_ms')}"
-
-    def data_to_csv(self) -> str:
-        return f"{self.task_clock_total_ms},{self.task_clock_stats_ms.data_to_csv()}"
-
-@dataclass
-class L1CacheMetric:
-    """
-    Private L1 cache localization and data-miss trends.
-    """
-    l1d_total_accesses:      int
-    l1d_total_misses:        int
-    l1i_total_accesses:      int
-    l1i_total_misses:        int
-    l1d_miss_rate_stats_pct: MetricStats
-    l1i_miss_rate_stats_pct: MetricStats
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"l1d_total_accesses,l1d_total_misses,l1i_total_accesses,l1i_total_misses,{MetricStats.to_csv_header('l1d_miss_rate_pct')},{MetricStats.to_csv_header('l1i_miss_rate_pct')}"
-
-    def data_to_csv(self) -> str:
-        return f"{self.l1d_total_accesses},{self.l1d_total_misses},{self.l1i_total_accesses},{self.l1i_total_misses},{self.l1d_miss_rate_stats_pct.data_to_csv()},{self.l1i_miss_rate_stats_pct.data_to_csv()}"
-
-@dataclass
-class L2CacheMetric:
-    """
-    Private L2 cache localization and data-miss trends.
-    """
-    l2_total_accesses:      int
-    l2_total_misses:        int
-    l2_miss_rate_stats_pct: MetricStats
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"l2_total_accesses,l2_total_misses,{MetricStats.to_csv_header('l2_miss_rate_pct')}"
-
-    def data_to_csv(self) -> str:
-        return f"{self.l2_total_accesses},{self.l2_total_misses},{self.l2_miss_rate_stats_pct.data_to_csv()}"
-
-@dataclass
-class LLCacheMetric:
-    """
-    Last Level Cache (Shared LLC/L3 Cache) system performance footprints.
-    """
-    llc_total_accesses:      int
-    llc_total_misses:        int
-    llc_miss_rate_stats_pct: MetricStats
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"llc_total_accesses,llc_total_misses,{MetricStats.to_csv_header('llc_miss_rate_pct')}"
-
-    def data_to_csv(self) -> str:
-        return f"{self.llc_total_accesses},{self.llc_total_misses},{self.llc_miss_rate_stats_pct.data_to_csv()}"
-
-@dataclass
-class BranchPredictionMetric:
-    """
-    Tracks total conditional branches evaluated versus pipeline speculative mispredictions.
-    """
-    total_branches:      int
-    total_branch_misses: int
-    branch_miss_rate_stats_pct: MetricStats
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"total_branches,total_branch_misses,{MetricStats.to_csv_header('branch_miss_rate_pct')}"
-
-    def data_to_csv(self) -> str:
-        return f"{self.total_branches},{self.total_branch_misses},{self.branch_miss_rate_stats_pct.data_to_csv()}"
-
-@dataclass
-class CPUMetric:
-    """
-    Unified execution core performance block.
-    Aggregates compute intensity, pipeline hazards, and memory-subsystem cache hierarchies.
-    """
-    ipc:               IPCMetric
-    task_clock:        TaskClockMetric
-    l1_cache:          L1CacheMetric
-    l2_cache:          L2CacheMetric
-    llc_cache:         LLCacheMetric
-    branch_prediction: BranchPredictionMetric
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"{IPCMetric.to_csv_header()},{TaskClockMetric.to_csv_header()},{L1CacheMetric.to_csv_header()},{L2CacheMetric.to_csv_header()},{LLCacheMetric.to_csv_header()},{BranchPredictionMetric.to_csv_header()}"
-
-    def data_to_csv(self) -> str:
-        return f"{self.ipc.data_to_csv()},{self.task_clock.data_to_csv()},{self.l1_cache.data_to_csv()},{self.l2_cache.data_to_csv()},{self.llc_cache.data_to_csv()},{self.branch_prediction.data_to_csv()}"
-
-@dataclass
-class GPUMetric:
-    """
-    Accelerated graphics compute block tracked via subprocess background loops using `rocm-smi`.
-    """
-    activity_stats_pct: MetricStats
-    vram_stats_pct:     MetricStats
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"{MetricStats.to_csv_header('gpu_activity_pct')},{MetricStats.to_csv_header('gpu_vram_pct')}"
-
-    def data_to_csv(self) -> str:
-        return f"{self.activity_stats_pct.data_to_csv()},{self.vram_stats_pct.data_to_csv()}"
-
-@dataclass
-class MemoryMetric:
-    """
-    Host volatile workspace allocations sampled via psutil tracking threads.
-    """
-    total_page_faults:  int
-    total_minor_faults: int
-    total_major_faults: int
-    rss_stats_mb:       MetricStats
-    vms_stats_mb:       MetricStats
-    page_faults_stats:  MetricStats
-    minor_faults_stats: MetricStats
-    major_faults_stats: MetricStats
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"total_page_faults,total_minor_faults,total_major_faults,{MetricStats.to_csv_header('rss_mb')},{MetricStats.to_csv_header('vms_mb')},{MetricStats.to_csv_header('page_faults')},{MetricStats.to_csv_header('minor_faults')},{MetricStats.to_csv_header('major_faults')}"
-
-    def data_to_csv(self) -> str:
-        return f"{self.total_page_faults},{self.total_minor_faults},{self.total_major_faults},{self.rss_stats_mb.data_to_csv()},{self.vms_stats_mb.data_to_csv()},{self.page_faults_stats.data_to_csv()},{self.minor_faults_stats.data_to_csv()},{self.major_faults_stats.data_to_csv()}"
-
-
-@dataclass
-class StartupMetric:
-    """
-    Measures dynamic linker (ld.so) startup overhead captured via LD_DEBUG=statistics.
-    Startup time stats represent mean, median, stddev, min, max startup time
-    """
-    linker_total_cycles:     int
-    startup_time_stats_ms: MetricStats
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"linker_total_cycles,{MetricStats.to_csv_header('startup_time_ms')}"
-
-    def data_to_csv(self) -> str:
-        return f"{self.linker_total_cycles},{self.startup_time_stats_ms.data_to_csv()}"
-
-@dataclass
-class ThreadMetric:
-    total_context_switches:       int
-    context_switches_stats:       MetricStats
-    thread_count_stats:           MetricStats
-    thread_utilization_stats_pct: MetricStats
-
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"total_context_switches,{MetricStats.to_csv_header('context_switches')},{MetricStats.to_csv_header('thread_count')},{MetricStats.to_csv_header('thread_utilization_pct')}"
-
-    def data_to_csv(self) -> str:
-        return f"{self.total_context_switches},{self.context_switches_stats.data_to_csv()},{self.thread_count_stats.data_to_csv()},{self.thread_utilization_stats_pct.data_to_csv()}"
-
 @dataclass
 class Metrics:
-    """The unified mathematical metric encompassing all active profiling vectors."""
-    wall_time: WallTimeMetric
-    cpu:       CPUMetric     | None
-    gpu:       GPUMetric     | None
-    memory:    MemoryMetric  | None
-    startup:   StartupMetric | None
-    thread:    ThreadMetric  | None
+    record: Record
 
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"{WallTimeMetric.to_csv_header()},{CPUMetric.to_csv_header()},{GPUMetric.to_csv_header()},{MemoryMetric.to_csv_header()},{StartupMetric.to_csv_header()},{ThreadMetric.to_csv_header()}"
-
-    def data_to_csv(self) -> str:
-        return ",".join([
-            self.wall_time.data_to_csv(),
-            self.cpu.data_to_csv()     if self.cpu     else ",".join([""] * len(CPUMetric.to_csv_header().split(","))),
-            self.gpu.data_to_csv()     if self.gpu     else ",".join([""] * len(GPUMetric.to_csv_header().split(","))),
-            self.memory.data_to_csv()  if self.memory  else ",".join([""] * len(MemoryMetric.to_csv_header().split(","))),
-            self.startup.data_to_csv() if self.startup else ",".join([""] * len(StartupMetric.to_csv_header().split(","))),
-            self.thread.data_to_csv()  if self.thread  else ",".join([""] * len(ThreadMetric.to_csv_header().split(",")))
-        ])
-
+    def data_to_csv(self, expected_fields: list[str]) -> str:
+        return ",".join(str(self.record[field]) if field in self.record else "" for field in expected_fields)
+    
 class Measurement:
-    """
-    The root node of the data schema layer.
-    Combines environment configuration states, targeted workload loops, and fully computed 
-    performance statistics into a single self-contained document ready for serialization.
-    """
-    def __init__(self, metadata: Metadata, workload: Workload, metrics: Metrics):
+    def __init__(self, metadata: Metadata, workload: Workload, metrics: dict[str, Metrics], cfg: ProfilerConfig):
         self.metadata = metadata
         self.workload = workload
         self.metrics  = metrics
-    
-    def __repr__(self):
-        return f"Measurement(metadata={self.metadata}, workload={self.workload}, metrics={self.metrics})"
+        self.cfg      = cfg
 
-    @classmethod
-    def to_csv_header(cls) -> str:
-        return f"{Metadata.to_csv_header()},{Workload.to_csv_header()},{Metrics.to_csv_header()}"
+    def __repr__(self):
+        return (
+            f"Measurement(metadata={self.metadata}, workload={self.workload}, "
+            f"results={list(self.metrics)})"
+        )
+
+    def to_csv_header(self) -> str:
+        return f"{Metadata.to_csv_header()},{Workload.to_csv_header()},{','.join(self.cfg.csv_fields())}"
 
     def data_to_csv(self) -> str:
-        return f"{self.metadata.data_to_csv()},{self.workload.data_to_csv()},{self.metrics.data_to_csv()}"
+        static_cols = f"{self.metadata.data_to_csv()},{self.workload.data_to_csv()}"
+
+        dynamic_parts: list[str] = []
+        for seg_name, seg_cfg in self.cfg.segments.items():
+            expected = seg_cfg.output_fields()
+            result   = self.metrics.get(seg_name)
+            if result:
+                dynamic_parts.append(result.data_to_csv(expected))
+
+            else:
+                dynamic_parts.append(",".join([""] * len(expected)))
+
+        return f"{static_cols},{','.join(dynamic_parts)}"

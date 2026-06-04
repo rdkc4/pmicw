@@ -1,0 +1,203 @@
+# Profiler Metric Configuration
+#
+# Fixed segments: wall_time, cpu, gpu, memory, startup, thread
+# Each segment's internal metrics are fully dynamic.
+#
+# Metric types:
+#   ratio   - per-iteration numerator/denominator rate; always emits stats
+#             (mean, median, stddev, min, max). totals controls whether
+#             total_<numerator_key> and/or total_<denominator_key> are emitted.
+#             totals values: numerator | denominator
+#
+#   stats   - stats over a sampled series (mean, median, stddev, min, max).
+#             scale: optional multiplier applied before computation (e.g. ns => ms).
+#             total: true emits <name>_total (sum of all samples).
+#
+#   sum     - single accumulated total from a record key. Emits <name>_total.
+#
+#   derived - scalar computed after all other segments finish.
+#             formula: Python expression over the flat computed namespace.
+#             Every prior output field is available by its exact name.
+#             Safe builtins available: abs, round, min, max, sum.
+#             Emits a single field named <name>.
+#
+# Perf groups (cpu segment only):
+#   Events within a group are submitted together in one `perf stat -e {…}`
+#   invocation. use_ld_env injects LD_DEBUG=statistics + LD_BIND_NOW=1 so
+#   dynamic-linker cycles are captured alongside the core group.
+#
+# Output field naming:
+#   ratio  : <numerator_key>_total, <denominator_key>_total (if in totals),
+#             then <name>_mean, <name>_median, <name>_stddev, <name>_min, <name>_max
+#   stats  : <name>_total (if total: true),
+#             <name>_mean, <name>_median, <name>_stddev, <name>_min, <name>_max
+#   sum    : <name>_total
+#   derived: <name>
+
+segments:
+
+  # --------------------------------------------------------------------------
+  wall_time:
+    metrics:
+      - name: wall_time_ms
+        type: stats
+        key: execution_time
+        total: true
+
+  # --------------------------------------------------------------------------
+  cpu:
+    perf_groups:
+      - name: execution_core
+        use_ld_env: true
+        events:
+          - instructions
+          - cycles
+          - branches
+          - branch-misses
+          - task-clock
+          - context-switches
+          - page-faults
+          - minor-faults
+          - major-faults
+
+      - name: l1_caches
+        use_ld_env: false
+        events:
+          - L1-dcache-loads
+          - L1-dcache-load-misses
+          - L1-icache-loads
+          - L1-icache-load-misses
+
+      - name: l2_llc_caches
+        use_ld_env: false
+        events:
+          - l2_rqsts.references
+          - l2_rqsts.miss
+          - cache-references
+          - cache-misses
+
+    metrics:
+      - name: ipc
+        type: ratio
+        numerator: instructions
+        denominator: cycles
+        totals: [numerator, denominator]
+
+      - name: task_clock_ms
+        type: stats
+        key: task-clock
+        scale: 0.000001           # nanoseconds -> milliseconds
+        total: true
+
+      - name: branch_miss_rate_pct
+        type: ratio
+        numerator: branch-misses
+        denominator: branches
+        totals: [numerator, denominator]
+
+      - name: l1d_miss_rate_pct
+        type: ratio
+        numerator: L1-dcache-load-misses
+        denominator: L1-dcache-loads
+        totals: [numerator, denominator]
+
+      - name: l1i_miss_rate_pct
+        type: ratio
+        numerator: L1-icache-load-misses
+        denominator: L1-icache-loads
+        totals: [numerator, denominator]
+
+      - name: l2_miss_rate_pct
+        type: ratio
+        numerator: l2_cache_req_stat.ic_dc_miss_in_l2
+        denominator: l2_cache_req_stat.all
+        totals: [numerator, denominator]
+
+      - name: llc_miss_rate_pct
+        type: ratio
+        numerator: cache-misses
+        denominator: cache-references
+        totals: [numerator, denominator]
+
+  # --------------------------------------------------------------------------
+  # GPU daemon uses rocm-smi to gather metrics, therefor keys must correspond to what rocm-smi outputs in JSON format
+  gpu:
+    metrics:
+      - name: gpu_activity_pct
+        type: stats
+        key: "GPU use (%)"
+
+      - name: gpu_vram_pct
+        type: stats
+        key: "GPU Memory Allocated (VRAM%)"
+
+  # --------------------------------------------------------------------------
+  # memory daemons use psutil to gather metrics, therefor keys must correspond the values in psutil._ntp.pfullmem
+  # note: if key doesn't correspond any field in psutil._ntp.pfullmem, it will try to fallback to other metric (e.g. page-faults falls back to perf)
+  #       if fallback fails, values will be set to zeroes
+  memory:
+    metrics:
+      - name: rss_mb
+        type: stats
+        key: rss
+        scale: 0.000000954 # 1 / (1024 ** 2)
+
+      - name: vms_mb
+        type: stats
+        key: vms
+        scale: 0.000000954 # 1 / (1024 ** 2)
+
+      - name: page_faults
+        type: stats
+        key: page-faults
+        total: true
+
+      - name: minor_faults
+        type: stats
+        key: minor-faults
+        total: true
+
+      - name: major_faults
+        type: stats
+        key: major-faults
+        total: true
+
+  # --------------------------------------------------------------------------
+  startup:
+    metrics:
+      - name: linker_cycles
+        type: sum
+        key: ld
+
+      - name: startup_time_ms
+        type: derived
+        # ld cycles as a fraction of total CPU cycles, scaled to mean wall time
+        formula: (linker_cycles_total / cycles_total) * wall_time_ms_mean
+
+  # --------------------------------------------------------------------------
+  # thread daemons use psutil to gather metrics, therefor keys must correspond the values in psutil.Process
+  # note: if key doesn't correspond any field in psutil.Process, it will try to fallback to other metric (e.g. context-switches falls back to perf)
+  #       if fallback fails, values will be set to zeroes
+  thread:
+    metrics:
+      - name: context_switches
+        type: stats
+        key: context-switches
+        total: true
+
+      - name: thread_count
+        type: stats
+        key: num_threads
+
+      - name: thread_utilization_pct
+        type: derived
+        # fraction of CPU time actually used, normalised per thread
+        formula: (task_clock_ms_mean / wall_time_ms_mean) / thread_count_mean * 100
+
+record_groups:
+  wall_time: {}
+  perf:      {}
+  gpu:       {}
+  memory:    {}
+  thread:    {}
+  ld:        {}

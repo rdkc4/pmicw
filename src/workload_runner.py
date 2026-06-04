@@ -41,15 +41,16 @@ import os
 
 from cli_parser import parse_args
 from measurement import Measurement, Metadata, Metrics, Workload
-from metric_computer import compute_metrics
+from metric_computer import compute_records
 from metric_monitor import monitor_amd_gpu, monitor_process_memory, monitor_process_threads, spawn_monitor_daemon
+from metrics_config import ProfilerConfig, load_config
 from record_parser import parse_cpu_prof_output
 from csv_writer import write
 from record_types import RecordList
 from workload_context import WorkloadContext, WorkloadMetricSelection, WorkloadMonitors
 from typing import TypeAlias
 
-WorkloadMetrics: TypeAlias = tuple[RecordList, RecordList, RecordList, RecordList, RecordList]
+WorkloadMetrics: TypeAlias = tuple[RecordList, RecordList, RecordList]
 
 @dataclass
 class PerfGroupConfig:
@@ -57,46 +58,61 @@ class PerfGroupConfig:
     events: list[str]
     env:    dict[str, str] | None
 
-def run_workload(ctx: WorkloadContext) -> Metrics:
-    perf_event_groups = set_perf_events(ctx.selected_metrics.cpu, ctx.env)
+def run_workload(ctx: WorkloadContext, cfg: ProfilerConfig) -> dict[str, Metrics]:
+    perf_event_groups = get_perf_groups(cfg, ctx.selected_metrics.cpu, ctx.env)
 
     if ctx.selected_metrics.gpu:
-        spawn_monitor_daemon(
-            target  = monitor_amd_gpu,
-            args    = (
-                ctx.monitors.activity_event, 
-                ctx.monitors.shutdown_event, 
-                ctx.monitors.interval, 
-                ctx.records['gpu']
-            ),
-            daemons = ctx.monitors.daemon_threads
-        )
+        if cfg.segments.get('gpu', None) is not None:
+            spawn_monitor_daemon(
+                target  = monitor_amd_gpu,
+                args    = (
+                    ctx.monitors.activity_event, 
+                    ctx.monitors.shutdown_event, 
+                    ctx.monitors.interval, 
+                    ctx.records['gpu'],
+                    cfg.segments['gpu']
+                ),
+                daemons = ctx.monitors.daemon_threads
+            )
+
+        else:
+            print("Segment 'gpu' not found in config")
 
     if ctx.selected_metrics.memory:
-        spawn_monitor_daemon(
-            target  = monitor_process_memory,
-            args    = (
-                ctx.monitors.activity_event, 
-                ctx.monitors.shutdown_event, 
-                ctx.monitors.interval, 
-                ctx.monitors.active_pid, 
-                ctx.records['memory']
-            ),
-            daemons = ctx.monitors.daemon_threads
-        )
+        if cfg.segments.get('memory', None) is not None:
+            spawn_monitor_daemon(
+                target  = monitor_process_memory,
+                args    = (
+                    ctx.monitors.activity_event, 
+                    ctx.monitors.shutdown_event, 
+                    ctx.monitors.interval, 
+                    ctx.monitors.active_pid, 
+                    ctx.records['memory'],
+                    cfg.segments['memory']
+                ),
+                daemons = ctx.monitors.daemon_threads
+            )
+        
+        else:
+            print("Segment 'memory' not found in config")
 
     if ctx.selected_metrics.thread:
-        spawn_monitor_daemon(
-            target  = monitor_process_threads,
-            args    = (
-                ctx.monitors.activity_event, 
-                ctx.monitors.shutdown_event, 
-                ctx.monitors.interval, 
-                ctx.monitors.active_pid, 
-                ctx.records['thread']
-            ),
-            daemons = ctx.monitors.daemon_threads
-        )
+        if cfg.segments.get('thread', None) is not None:
+            spawn_monitor_daemon(
+                target  = monitor_process_threads,
+                args    = (
+                    ctx.monitors.activity_event, 
+                    ctx.monitors.shutdown_event, 
+                    ctx.monitors.interval, 
+                    ctx.monitors.active_pid, 
+                    ctx.records['thread'],
+                    cfg.segments['thread']
+                ),
+                daemons = ctx.monitors.daemon_threads
+            )
+
+        else:
+            print("Segment 'thread' not found in config")
 
     try:
         warmup_workload(ctx.command)
@@ -105,34 +121,30 @@ def run_workload(ctx: WorkloadContext) -> Metrics:
             for event_group in perf_event_groups:
                 command = ["perf", "stat", "-j", "-e", f"{{{",".join(event_group.events)}}}"] + ctx.command
 
-                wall_times, perf_records, memory_records, link_records, thread_records = execute_workload(
+                wall_times, perf_records, link_records = execute_workload(
                     command = command,
                     ctx     = ctx,
                     env     = event_group.env
                 )
 
-                ctx.records['wall-time'] += wall_times
-                ctx.records['memory']    += memory_records
+                ctx.records['wall_time'] += wall_times
                 ctx.records['perf']      += perf_records
-                ctx.records['thread']    += thread_records
                 ctx.records['ld']        += link_records
 
         else:
-            wall_times, _, memory_records, _, thread_records = execute_workload(
+            wall_times, _, _ = execute_workload(
                 command = ctx.command,
                 ctx     = ctx
             )
 
-            ctx.records['wall-time']  = wall_times
-            ctx.records['memory']    += memory_records
-            ctx.records['thread']    += thread_records
+            ctx.records['wall_time']  = wall_times
 
     finally:
         ctx.monitors.shutdown_event.set()
         for daemon in ctx.monitors.daemon_threads:
             daemon.join()
 
-    return compute_metrics(ctx.selected_metrics, ctx.records)
+    return compute_records(cfg, ctx.records)
 
 def warmup_workload(command: list[str], warmup_iterations: int = 0) -> None:
     for _ in range(warmup_iterations):
@@ -146,9 +158,7 @@ def execute_workload(
     
     wall_times:     RecordList = []
     perf_records:   RecordList = []
-    memory_records: RecordList = []
     link_records:   RecordList = []
-    thread_records: RecordList = []
 
     for _ in range(ctx.iterations):
         start = time.perf_counter()
@@ -181,53 +191,33 @@ def execute_workload(
             perf_records.append(perf_record)
             link_records.append(link_record)
 
-    return wall_times, perf_records, memory_records, link_records, thread_records
+    return wall_times, perf_records, link_records
     
+def get_perf_groups(cfg: ProfilerConfig, cpu_selected: bool, base_env: dict[str, str]) -> list[PerfGroupConfig]:
+    if not cpu_selected or "cpu" not in cfg.segments:
+        return []
+    
+    active_groups = []
+    cpu_segment   = cfg.segments["cpu"]
 
-def set_perf_events(cpu_selected: bool, env: dict[str,str] | None = None) -> list[PerfGroupConfig]:
-    if cpu_selected:
-        perf_event_groups = [
+    for group in cpu_segment.perf_groups:
+        group_env = None
+        if group.use_ld_env:
+            group_env = base_env.copy()
+            group_env["LD_DEBUG"] = "statistics"
+            group_env["LD_BIND_NOW"] = "1"
+        
+        active_groups.append(
             PerfGroupConfig(
-                name   = "execution_core",
-                events = [
-                    "instructions",
-                    "cycles",
-                    "branches",
-                    "branch-misses",
-                    "task-clock",
-                    "context-switches",
-                    "page-faults",
-                    "minor-faults",
-                    "major-faults"
-                ],
-                env    = env
-            ),
-            PerfGroupConfig(
-                name   = "l1_caches",
-                events = [
-                    "L1-dcache-loads",
-                    "L1-dcache-load-misses",
-                    "L1-icache-loads",
-                    "L1-icache-load-misses"
-                ],
-                env    = None
-            ),
-            PerfGroupConfig(
-                name   = "l2_llc_caches",
-                events = [
-                    "l2_cache_req_stat.all",
-                    "l2_cache_req_stat.ic_dc_miss_in_l2",
-                    "cache-references",
-                    "cache-misses"
-                ],
-                env    = None
+                name   = group.name,
+                events = group.events,
+                env    = group_env
             )
-        ]
-        return perf_event_groups
+        )
 
-    return []
+    return active_groups
 
-def setup_workload_context(args: argparse.Namespace):
+def setup_workload_context(args: argparse.Namespace, cfg: ProfilerConfig):
     env = os.environ.copy()
     env["LD_DEBUG"]    = "statistics"
     env["LD_BIND_NOW"] = "1"
@@ -254,44 +244,40 @@ def setup_workload_context(args: argparse.Namespace):
         selected_metrics  = metrics,
         command           = [args.workload] + (args.workload_args or []),
         env               = env,
-        records           = {
-            'wall-time': [],
-            'perf':      [],
-            'ld':        [],
-            'gpu':       [],
-            'memory':    [],
-            'thread':    []
-        },
+        records           = {group: [] for group in cfg.record_groups},
         monitors          = monitors
     )
 
 def assemble_workload(args: argparse.Namespace) -> Workload:
     return Workload(
-        name              = args.workload,
+        name              = args.workload.split('/')[-1],
         iterations        = args.iteration,
         warmup_iterations = args.warmup_iteration,
         arguments         = args.workload_args or []
     )
 
-def assemble_measurement(workload: Workload, metrics: Metrics) -> Measurement:
+def assemble_measurement(workload: Workload, metrics: dict[str, Metrics], cfg: ProfilerConfig) -> Measurement:
     return Measurement(
         metadata = Metadata(),
         workload = workload,
-        metrics  = metrics
+        metrics  = metrics,
+        cfg      = cfg
     )
 
 def main():
     args     = parse_args()
-    ctx      = setup_workload_context(args)
+    cfg      = load_config("config/metrics_config.yaml")
+    ctx      = setup_workload_context(args, cfg)
     workload = assemble_workload(args)
 
     try:
-        metrics = run_workload(ctx)
+        metrics = run_workload(ctx, cfg)
+
     except RuntimeError as e:
         print(f"Error: {e}")
         sys.exit(1)
 
-    measurement = assemble_measurement(workload, metrics)
+    measurement = assemble_measurement(workload, metrics, cfg)
     write(measurement)
 
 if __name__ == "__main__":
