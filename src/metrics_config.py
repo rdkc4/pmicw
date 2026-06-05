@@ -39,12 +39,21 @@ class Segments(StrEnum):
     LD        = "ld"
     PERF      = "perf"
 
+class Direction(StrEnum):
+    HIGHER_BETTER = "higher_better"
+    LOWER_BETTER  = "lower_better"
+    NEUTRAL       = "neutral"
+
 @dataclass
 class RatioMetric:
-    name:        str
-    numerator:   str
-    denominator: str
-    totals:      TotalsSpec = field(default_factory = list)
+    name:                      str
+    numerator:                 str
+    denominator:               str
+    totals:                    TotalsSpec = field(default_factory = list)
+    direction:                 Direction  = Direction.NEUTRAL
+    noise_floor_pct:           float      = 0.0
+    improvement_threshold_pct: float      = 0.0 
+    regression_threshold_pct:  float      = 0.0
 
     def output_fields(self) -> list[str]:
         fields = []
@@ -59,10 +68,14 @@ class RatioMetric:
 
 @dataclass
 class StatsMetric:
-    name:  str
-    key:   str
-    scale: float = 1.0
-    total: bool  = False
+    name:                      str
+    key:                       str
+    scale:                     float     = 1.0
+    total:                     bool      = False
+    direction:                 Direction = Direction.NEUTRAL
+    noise_floor_pct:           float     = 0.0
+    improvement_threshold_pct: float     = 0.0 
+    regression_threshold_pct:  float     = 0.0
 
     def output_fields(self) -> list[str]:
         fields = []
@@ -74,16 +87,24 @@ class StatsMetric:
 
 @dataclass
 class SumMetric:
-    name: str
-    key:  str
+    name:                      str
+    key:                       str
+    direction:                 Direction = Direction.NEUTRAL
+    noise_floor_pct:           float     = 0.0
+    improvement_threshold_pct: float     = 0.0 
+    regression_threshold_pct:  float     = 0.0
 
     def output_fields(self) -> list[str]:
         return [f"{self.name}_total"]
 
 @dataclass
 class DerivedMetric:
-    name:    str
-    formula: str
+    name:                      str
+    formula:                   str
+    direction:                 Direction = Direction.NEUTRAL
+    noise_floor_pct:           float     = 0.0
+    improvement_threshold_pct: float     = 0.0 
+    regression_threshold_pct:  float     = 0.0
 
     def output_fields(self) -> list[str]:
         return [self.name]
@@ -146,7 +167,7 @@ class SegmentConfig:
 
 @dataclass
 class ProfilerConfig:
-    segments:      dict[str, SegmentConfig]
+    segments: dict[str, SegmentConfig]
 
     def csv_fields(self) -> list[str]:
         fields = []
@@ -203,8 +224,17 @@ def load_config(path: str = "metrics.yaml") -> ProfilerConfig:
     return cfg
 
 def parse_metric(seg_name: str, raw: dict) -> AnyMetric:
-    mtype = raw.get("type")
-    name  = raw.get("name")
+    mtype                     = raw.get("type")
+    name                      = raw.get("name")
+    direction                 = Direction.NEUTRAL
+    noise_floor_pct           = float(raw.get("noise_floor_pct", 0.0))
+    improvement_threshold_pct = float(raw.get("noise_floor_pct", 0.0))
+    regression_threshold_pct  = float(raw.get("noise_floor_pct", 0.0))
+
+    try:
+        direction = Direction(raw.get("direction", "neutral"))
+    except Exception as e:
+        pass
 
     if not name:
         raise ValueError(f"Segment '{seg_name}': metric missing 'name' field.")
@@ -214,25 +244,47 @@ def parse_metric(seg_name: str, raw: dict) -> AnyMetric:
 
     if mtype == "ratio":
         return RatioMetric(
-            name        = name,
-            numerator   = raw["numerator"],
-            denominator = raw["denominator"],
-            totals      = raw.get("totals", []),
+            name                      = name,
+            numerator                 = raw["numerator"],
+            denominator               = raw["denominator"],
+            totals                    = raw.get("totals", []),
+            direction                 = direction,
+            noise_floor_pct           = noise_floor_pct,
+            improvement_threshold_pct = improvement_threshold_pct,
+            regression_threshold_pct  = regression_threshold_pct
         )
     
     if mtype == "stats":
         return StatsMetric(
-            name  = name,
-            key   = raw["key"],
-            scale = float(raw.get("scale", 1.0)),
-            total = bool(raw.get("total", False)),
+            name                      = name,
+            key                       = raw["key"],
+            scale                     = float(raw.get("scale", 1.0)),
+            total                     = bool(raw.get("total", False)),
+            direction                 = direction,
+            noise_floor_pct           = noise_floor_pct,
+            improvement_threshold_pct = improvement_threshold_pct,
+            regression_threshold_pct  = regression_threshold_pct
         )
     
     if mtype == "sum":
-        return SumMetric(name = name, key = raw["key"])
+        return SumMetric(
+            name                      = name, 
+            key                       = raw["key"], 
+            direction                 = direction,
+            noise_floor_pct           = noise_floor_pct,
+            improvement_threshold_pct = improvement_threshold_pct,
+            regression_threshold_pct  = regression_threshold_pct
+        )
     
     if mtype == "derived":
-        return DerivedMetric(name = name, formula = raw["formula"])
+        return DerivedMetric(
+            name                      = name, 
+            formula                   = raw["formula"], 
+            direction                 = direction,
+            noise_floor_pct           = noise_floor_pct,
+            improvement_threshold_pct = improvement_threshold_pct,
+            regression_threshold_pct  = regression_threshold_pct
+        )
 
     raise ValueError(
         f"Segment '{seg_name}', metric '{name}': unknown type '{mtype}'. "

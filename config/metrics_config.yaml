@@ -3,19 +3,22 @@
 # Fixed segments: wall_time, cpu, gpu, memory, startup, thread
 # Each segment's internal metrics are fully dynamic.
 #
+# Metric name : column name for the csv
+# Metric key  : name by which metrics are obtained from records
+#
 # Metric types:
-#   ratio   - per-iteration numerator/denominator rate; always emits stats
+#   ratio   : per-iteration numerator/denominator rate; always emits stats
 #             (mean, median, stddev, min, max). totals controls whether
 #             total_<numerator_key> and/or total_<denominator_key> are emitted.
 #             totals values: numerator | denominator
 #
-#   stats   - stats over a sampled series (mean, median, stddev, min, max).
+#   stats   : stats over a sampled series (mean, median, stddev, min, max).
 #             scale: optional multiplier applied before computation (e.g. ns => ms).
 #             total: true emits <name>_total (sum of all samples).
 #
-#   sum     - single accumulated total from a record key. Emits <name>_total.
+#   sum     : single accumulated total from a record key. Emits <name>_total.
 #
-#   derived - scalar computed after all other segments finish.
+#   derived : scalar computed after all other segments finish.
 #             formula: Python expression over the flat computed namespace.
 #             Every prior output field is available by its exact name.
 #             Safe builtins available: abs, round, min, max, sum.
@@ -33,6 +36,24 @@
 #             <name>_mean, <name>_median, <name>_stddev, <name>_min, <name>_max
 #   sum    : <name>_total
 #   derived: <name>
+#
+# Metrics semantics:
+# - direction                 : lower_better, higher_better, neutral
+#                               lower_better  => lower values mean improvement
+#                               higher_better => higher values mean improvement
+#                               neutral       => doesn't directly affect performance
+#
+# - noise_floor_pct           : detects noise if abs(delta_pct) <= noise_floor_pct
+#                               note: noise_floor_pct should be non-negative number
+#
+# - improvement_threshold_pct : detects improvement if delta_pct <= -improvement_threshold_pct (for lower_better)
+#                               detects improvement if delta_pct >=  improvement_threshold_pct (for higher_better)
+#                               note: improvement_threshold_pct should be non-negative number
+#  
+# - regression_threshold_pct  : detects regression if delta_pct >=  regression_threshold_pct (for lower_better)
+#                               detects regression if delta_pct <= -regression_threshold_pct (for higher_better)
+#                               note: improvement_threshold_pct should be non-negative number
+#
 
 segments:
 
@@ -43,6 +64,10 @@ segments:
         type: stats
         key: execution_time
         total: true
+        direction: lower_better
+        noise_floor_pct: 5.0
+        improvement_threshold_pct: 5.0
+        regression_threshold_pct: 5.0
 
   # --------------------------------------------------------------------------
   cpu:
@@ -82,42 +107,70 @@ segments:
         numerator: instructions
         denominator: cycles
         totals: [numerator, denominator]
+        direction: higher_better
+        noise_floor_pct: 1.0
+        improvement_threshold_pct: 2.0
+        regression_threshold_pct: 2.0
 
       - name: task_clock_ms
         type: stats
         key: task-clock
         scale: 0.000001           # nanoseconds -> milliseconds
         total: true
+        direction: lower_better
+        noise_floor_pct: 5.0
+        improvement_threshold_pct: 5.0
+        regression_threshold_pct: 5.0
 
       - name: branch_miss_rate_pct
         type: ratio
         numerator: branch-misses
         denominator: branches
         totals: [numerator, denominator]
+        direction: lower_better
+        noise_floor_pct: 0.5
+        improvement_threshold_pct: 1.0
+        regression_threshold_pct: 1.0
 
       - name: l1d_miss_rate_pct
         type: ratio
         numerator: L1-dcache-load-misses
         denominator: L1-dcache-loads
         totals: [numerator, denominator]
+        direction: lower_better
+        noise_floor_pct: 0.5
+        improvement_threshold_pct: 1.0
+        regression_threshold_pct: 1.0
 
       - name: l1i_miss_rate_pct
         type: ratio
         numerator: L1-icache-load-misses
         denominator: L1-icache-loads
         totals: [numerator, denominator]
+        direction: lower_better
+        noise_floor_pct: 0.5
+        improvement_threshold_pct: 1.0
+        regression_threshold_pct: 1.0
 
       - name: l2_miss_rate_pct
         type: ratio
         numerator: l2_cache_req_stat.ic_dc_miss_in_l2
         denominator: l2_cache_req_stat.all
         totals: [numerator, denominator]
+        direction: lower_better
+        noise_floor_pct: 0.5
+        improvement_threshold_pct: 1.0
+        regression_threshold_pct: 1.0
 
       - name: llc_miss_rate_pct
         type: ratio
         numerator: cache-misses
         denominator: cache-references
         totals: [numerator, denominator]
+        direction: lower_better
+        noise_floor_pct: 0.5
+        improvement_threshold_pct: 1.0
+        regression_threshold_pct: 1.0
 
   # --------------------------------------------------------------------------
   # GPU daemon uses rocm-smi to gather metrics, therefor keys must correspond to what rocm-smi outputs in JSON format
@@ -126,10 +179,18 @@ segments:
       - name: gpu_activity_pct
         type: stats
         key: "GPU use (%)"
+        direction: higher_better
+        noise_floor_pct: 2.0
+        improvement_threshold_pct: 3.0
+        regression_threshold_pct: 3.0
 
       - name: gpu_vram_pct
         type: stats
         key: "GPU Memory Allocated (VRAM%)"
+        direction: lower_better
+        noise_floor_pct: 2.0
+        improvement_threshold_pct: 3.0
+        regression_threshold_pct: 3.0
 
   # --------------------------------------------------------------------------
   # memory daemons use psutil to gather metrics, therefor keys must correspond the values in psutil._ntp.pfullmem
@@ -140,27 +201,47 @@ segments:
       - name: rss_mb
         type: stats
         key: rss
-        scale: 0.000000954 # 1 / (1024 ** 2)
+        scale: 0.000000954 # 1 / (1024 ** 2)   bytes => megabytes
+        direction: lower_better
+        noise_floor_pct: 5.0
+        improvement_threshold_pct: 5.0
+        regression_threshold_pct: 5.0
 
       - name: vms_mb
         type: stats
         key: vms
-        scale: 0.000000954 # 1 / (1024 ** 2)
+        scale: 0.000000954 # 1 / (1024 ** 2)   bytes => megabytes
+        direction: lower_better
+        noise_floor_pct: 1.0
+        improvement_threshold_pct: 2.0
+        regression_threshold_pct: 2.0
 
       - name: page_faults
         type: stats
         key: page-faults
         total: true
+        direction: lower_better
+        noise_floor_pct: 1.0
+        improvement_threshold_pct: 2.0
+        regression_threshold_pct: 2.0
 
       - name: minor_faults
         type: stats
         key: minor-faults
         total: true
+        direction: lower_better
+        noise_floor_pct: 1.0
+        improvement_threshold_pct: 2.0
+        regression_threshold_pct: 2.0
 
       - name: major_faults
         type: stats
         key: major-faults
         total: true
+        direction: lower_better
+        noise_floor_pct: 1.0
+        improvement_threshold_pct: 2.0
+        regression_threshold_pct: 2.0
 
   # --------------------------------------------------------------------------
   startup:
@@ -168,11 +249,19 @@ segments:
       - name: linker_cycles
         type: sum
         key: ld
+        direction: lower_better
+        noise_floor_pct: 2.0
+        improvement_threshold_pct: 3.0
+        regression_threshold_pct: 3.0
 
       - name: startup_time_ms
         type: derived
         # ld cycles as a fraction of total CPU cycles, scaled to mean wall time
         formula: (linker_cycles_total / cycles_total) * wall_time_ms_mean
+        direction: lower_better
+        noise_floor_pct: 5.0
+        improvement_threshold_pct: 5.0
+        regression_threshold_pct: 5.0
 
   # --------------------------------------------------------------------------
   # thread daemons use psutil to gather metrics, therefor keys must correspond the values in psutil.Process
@@ -184,12 +273,24 @@ segments:
         type: stats
         key: context-switches
         total: true
+        direction: lower_better
+        noise_floor_pct: 1.0
+        improvement_threshold_pct: 2.0
+        regression_threshold_pct: 2.0
 
       - name: thread_count
         type: stats
         key: num_threads
+        direction: neutral
+        noise_floor_pct: 0.0
+        improvement_threshold_pct: 0.0
+        regression_threshold_pct: 0.0
 
       - name: thread_utilization_pct
         type: derived
         # fraction of CPU time actually used, normalised per thread
         formula: (task_clock_ms_mean / wall_time_ms_mean) / thread_count_mean * 100
+        direction: higher_better
+        noise_floor_pct: 2.0
+        improvement_threshold_pct: 3.0
+        regression_threshold_pct: 3.0

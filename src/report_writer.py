@@ -2,7 +2,18 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from comparison_context import MetricStatus
+
 REPORT_DIR = Path.cwd() / "reports"
+
+MD_REPORT_ROW_COLORS = {
+    MetricStatus.REGRESSION:  "background-color: rgba(255, 77, 77, 0.15); border-left: 5px solid #ff4d4d;",
+    MetricStatus.IMPROVEMENT: "background-color: rgba(77, 175, 74, 0.15); border-left: 5px solid #4daf4a;",
+    MetricStatus.NOISE:       "color: #888888; font-style: italic;",
+    MetricStatus.INTERESTING: "background-color: rgba(255, 165, 0, 0.12); border-left: 5px solid #d97706;",
+    MetricStatus.INVALID:     "background-color: rgba(200, 200, 200, 0.1); color: #9ca3af; text-decoration: line-through;",
+    MetricStatus.IRRELEVANT:  "background-color: transparent; color: #555555;"
+}
 
 def write_report(df: pd.DataFrame, report_formats: list[str], report_path: str) -> None:
     report_data = {"comparisons": []}
@@ -55,16 +66,44 @@ def write_md_report(report_data: dict, output_path: Path) -> None:
         metrics_df = pd.DataFrame(comparison["metrics"])
         
         if not metrics_df.empty:
-            display_cols   = ["metric", "baseline_val", "contender_val", "delta_abs", "delta_pct", "unit"]
+            display_cols   = ["metric", "baseline_val", "contender_val", "delta_abs", "delta_pct", "unit", "status"]
             available_cols = [col for col in display_cols if col in metrics_df.columns]
+            
+            html = ["<table style='width:100%; border-collapse: collapse; font-family: monospace;'>"]
+            
+            html.append("  <thead><tr style='border-bottom: 2px solid #888; background-color: #f3f4f6;'>")
+            for col in available_cols:
+                html.append(f"    <th style='text-align: left; padding: 6px 12px; font-weight: bold;'>{col}</th>")
 
-            lines.append(metrics_df[available_cols].to_markdown(index = False))
+            html.append("  </tr></thead>")
+            
+            html.append("  <tbody>")
+            for _, row in metrics_df.iterrows():
+                status = row.get("status", MetricStatus.IRRELEVANT).lower()
+                row_style = MD_REPORT_ROW_COLORS.get(status, "")
+                
+                html.append(f"    <tr style='border-bottom: 1px solid #e5e7eb; {row_style}'>")
+                for col in available_cols:
+                    val = row[col] if pd.notna(row[col]) else ""
+                    
+                    if col == "status" and status in ["regression", "improvement"]:
+                        html.append(f"      <td style='padding: 6px 12px; font-weight: bold; text-transform: uppercase;'>{val}</td>")
+
+                    elif isinstance(val, float):
+                        html.append(f"      <td style='padding: 6px 12px;'>{val:.6g}</td>")
+
+                    else:
+                        html.append(f"      <td style='padding: 6px 12px;'>{val}</td>")
+
+                html.append("    </tr>")
+                
+            html.append("  </tbody>")
+            html.append("</table>")
+            
+            lines.append("\n".join(html))
             lines.append("")
         
-    output_path.write_text(
-        "\n".join(lines),
-        encoding="utf-8"
-    )
+    output_path.write_text("\n".join(lines), encoding="utf-8")
 
 def generate_report_path(relative_path, format: str) -> Path:
     return REPORT_DIR / f"{relative_path}.{format}"
