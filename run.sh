@@ -173,7 +173,9 @@ else
     "${RUNNER_COMMAND[@]}"
 fi
 
-"${COMPARISON_COMMAND[@]}"
+if [[ ${#COMPARISON_COMMAND[@]} -gt 1 ]]; then
+    "${COMPARISON_COMMAND[@]}"
+fi
 
 log_host_posture "DURING"
 
