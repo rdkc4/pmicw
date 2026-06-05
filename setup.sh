@@ -45,11 +45,12 @@ chmod +x run.sh
 
 echo "Setup [5/6]: Making Python modules executable..."
 chmod +x src/workload_runner.py
+chmod +x src/measurement_comparison.py
 
 echo "Setup [6/6]: Setup complete"
 echo
 echo "To run a workload, use:"
 echo "  $ source .venv/bin/activate"
-echo "  $ ./run.sh <workload-runner-path> [options] <workload> [workload-args...]"
+echo "  $ ./run.sh [options] <workload> [workload-args...]"
 echo
-echo "  Example: $ ./run.sh ./src/workload_runner.py -m cpu,gpu,memory workload arg1 arg2"
+echo "  Example: $ ./run.sh -rfmt csv,md,json -m cpu,gpu,memory workload arg1 arg2"

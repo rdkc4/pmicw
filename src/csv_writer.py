@@ -23,10 +23,9 @@ def repo_to_filename(repository: str, header: str) -> str:
         filename      = f"{account}_{repo}"
 
     header_hash = generate_header_hash(header)
-    filename = f"{filename}_{header_hash}"
-
-    filename = re.sub(r"[^\w\-]", "_", filename)
-    filename = re.sub(r"_+", "_", filename).strip("_")
+    filename    = f"{filename}_{header_hash}"
+    filename    = re.sub(r"[^\w\-]", "_", filename)
+    filename    = re.sub(r"_+", "_", filename).strip("_")
 
     return f"{filename or 'measurements'}.csv"
 

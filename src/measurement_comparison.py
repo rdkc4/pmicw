@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from __future__ import annotations
 
 import numpy as np
@@ -121,3 +122,9 @@ def compute_deltas(df: pd.DataFrame, baseline_run_id: str, cfg: ProfilerConfig) 
         "timestamp",
         "metric"
     ]).reset_index(drop = True)
+
+def main():
+    print("TODO...")
+
+if __name__ == "__main__":
+    main()

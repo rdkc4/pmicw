@@ -3,6 +3,9 @@ CLI Parsing Module for the Workload Profiler.
 
 This module exposes the command-line interface structure using `argparse`.
 
+
+CLI Parser for Workload Runner:
+
 Expected Syntax:
     [options] <workload> [workload-args]
 
@@ -28,6 +31,16 @@ Core Structural Rules:
                            - default: 1
                            - usage: [--iteration <n>], where n > 0
 
+    - `-help`, `--help` - shows help message and exits
+
+
+CLI Parser for Analysis Runner:
+
+Expected Syntax:
+    [options]
+
+
+ - [options]
     - `-cmp`, `--compare` - compare current results with n previous results
                           - usage: [--compare <n>], where n > 0
 
@@ -63,18 +76,18 @@ METRICS        = {'wall-time', 'cpu', 'gpu', 'memory', 'thread'}
 REPORT_FORMATS = {'csv', 'md', 'json'}
 VISUAL_FORMATS = {'table', 'chart', 'graph'}
 
-def parse_args() -> argparse.Namespace:
-    parser = create_cli_parser()
+def parse_runner_args() -> argparse.Namespace:
+    parser = create_runner_cli_parser()
     return parser.parse_args()
 
-def create_cli_parser() -> argparse.ArgumentParser:
+def create_runner_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        'cli-parser', 
-        usage    = '%(prog)s [options] <workload> [workload-args...]', 
+        'runner-cli-parser',
+        usage    = '%(prog)s [options] <workload> [workload-args...]',
         add_help = False
     )
 
-    add_options(parser)
+    add_runner_options(parser)
     add_workload_args(parser)
 
     return parser
@@ -91,7 +104,7 @@ def add_workload_args(parser: argparse.ArgumentParser) -> None:
         help    = 'arguments for the workload separated by space'
     )
 
-def add_options(parser: argparse.ArgumentParser) -> None:
+def add_runner_options(parser: argparse.ArgumentParser) -> None:
     options = parser.add_argument_group('options')
 
     options.add_argument(
@@ -116,6 +129,40 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     )
 
     options.add_argument(
+        '-h', '--help',
+        action = 'help',
+        help   = 'show this help message and exit'
+    )
+
+def parse_metrics(metrics_str: str) -> MetricSelection:
+    metrics = [m.strip() for m in metrics_str.split(',')]
+
+    invalid = set(metrics) - METRICS
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            f'invalid metrics: {", ".join(sorted(invalid))}'
+        )
+
+    return metrics
+
+def parse_analysis_args() -> argparse.Namespace:
+    parser = create_analysis_cli_parser()
+    return parser.parse_args()
+
+def create_analysis_cli_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        'analysis-cli-parser',
+        usage    = '%(prog)s [options]',
+        add_help = False
+    )
+    add_analysis_options(parser)
+
+    return parser
+
+def add_analysis_options(parser: argparse.ArgumentParser) -> None:
+    options = parser.add_argument_group('options')
+
+    options.add_argument(
         '-cmp', '--compare',
         type = parse_positive_int,
         help = 'compare with a specific number of previous runs'
@@ -129,8 +176,8 @@ def add_options(parser: argparse.ArgumentParser) -> None:
 
     options.add_argument(
         '-cmpw', '--compare-with',
-        nargs = 1,
-        help  = 'compare current run with a specific run by its run ID'
+        type = str,
+        help = 'compare current run with a specific run by its run ID'
     )
 
     options.add_argument(
@@ -152,17 +199,6 @@ def add_options(parser: argparse.ArgumentParser) -> None:
         action = 'help',
         help   = 'show this help message and exit'
     )
-
-def parse_metrics(metrics_str: str) -> MetricSelection:
-    metrics = [m.strip() for m in metrics_str.split(',')]
-
-    invalid = set(metrics) - METRICS
-    if invalid:
-        raise argparse.ArgumentTypeError(
-            f'invalid metrics: {", ".join(sorted(invalid))}'
-        )
-
-    return metrics
 
 def parse_report_formats(formats_str: str) -> ReportFormats:
     formats = [f.strip() for f in formats_str.split(',')]

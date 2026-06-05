@@ -32,14 +32,13 @@ Usage:
     $ ./workload_runner.py [options] <workload> [workload-args...]
 """
 import argparse
-from dataclasses import dataclass
 import subprocess
 import sys
 import threading
 import time
 import os
 
-from cli_parser import parse_args
+from cli_parser import parse_runner_args
 from measurement import Measurement, Metadata, Metrics, Workload
 from metric_computer import compute_records
 from metric_monitor import start_monitoring
@@ -181,7 +180,7 @@ def assemble_measurement(workload: Workload, metrics: dict[str, Metrics], cfg: P
     )
 
 def main():
-    args     = parse_args()
+    args     = parse_runner_args()
     cfg      = load_config("config/metrics_config.yaml")
     ctx      = setup_workload_context(args, cfg)
     workload = assemble_workload(args)
