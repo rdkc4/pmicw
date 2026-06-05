@@ -67,14 +67,28 @@ Expected Syntax:
 
 import argparse
 from typing import TypeAlias
+from enum import StrEnum
 
-MetricSelection: TypeAlias = list[str]
-ReportFormats:   TypeAlias = list[str]
-VisualFormats:   TypeAlias = list[str]
+class MetricOptions(StrEnum):
+    WALL_TIME = 'wall-time'
+    CPU       = 'cpu'
+    GPU       = 'gpu'
+    MEMORY    = 'memory'
+    THREAD    = 'thread'
 
-METRICS        = {'wall-time', 'cpu', 'gpu', 'memory', 'thread'}
-REPORT_FORMATS = {'csv', 'md', 'json'}
-VISUAL_FORMATS = {'table', 'chart', 'graph'}
+class ReportFormatOptions(StrEnum):
+    CSV  = 'csv'
+    MD   = 'md'
+    JSON = 'json'
+
+class VisualFormatOptions(StrEnum):
+    TABLE = 'table'
+    CHART = 'chart'
+    GRAPH = 'graph'
+
+MetricSelection: TypeAlias = list[MetricOptions]
+ReportFormats:   TypeAlias = list[ReportFormatOptions]
+VisualFormats:   TypeAlias = list[VisualFormatOptions]
 
 def parse_runner_args() -> argparse.Namespace:
     parser = create_runner_cli_parser()
@@ -135,15 +149,13 @@ def add_runner_options(parser: argparse.ArgumentParser) -> None:
     )
 
 def parse_metrics(metrics_str: str) -> MetricSelection:
-    metrics = [m.strip() for m in metrics_str.split(',')]
+    metrics = [metric.strip() for metric in metrics_str.split(',')]
 
-    invalid = set(metrics) - METRICS
+    invalid = set(metrics) - set(MetricOptions)
     if invalid:
-        raise argparse.ArgumentTypeError(
-            f'invalid metrics: {", ".join(sorted(invalid))}'
-        )
-
-    return metrics
+        raise argparse.ArgumentTypeError(f'invalid metrics: {", ".join(invalid)}')
+    
+    return [MetricOptions(metric) for metric in metrics]
 
 def parse_analysis_args() -> argparse.Namespace:
     parser = create_analysis_cli_parser()
@@ -201,32 +213,31 @@ def add_analysis_options(parser: argparse.ArgumentParser) -> None:
     )
 
 def parse_report_formats(formats_str: str) -> ReportFormats:
-    formats = [f.strip() for f in formats_str.split(',')]
+    formats = [fmt.strip() for fmt in formats_str.split(',')]
 
-    invalid = set(formats) - REPORT_FORMATS
+    invalid = set(formats) - set(ReportFormatOptions)
     if invalid:
-        raise argparse.ArgumentTypeError(
-            f'invalid report formats: {", ".join(sorted(invalid))}'
-        )
+        raise argparse.ArgumentTypeError(f'invalid report formats: {", ".join(sorted(invalid))}')
 
-    return formats
+    return [ReportFormatOptions(fmt) for fmt in formats]
 
 def parse_visual_formats(formats_str: str) -> VisualFormats:
-    formats = [f.strip() for f in formats_str.split(',')]
+    formats = [fmt.strip() for fmt in formats_str.split(',')]
 
-    invalid = set(formats) - VISUAL_FORMATS
+    invalid = set(formats) - set(VisualFormatOptions)
     if invalid:
-        raise argparse.ArgumentTypeError(
-            f'invalid visual formats: {", ".join(sorted(invalid))}'
-        )
+        raise argparse.ArgumentTypeError(f'invalid visual formats: {", ".join(sorted(invalid))}')
 
-    return formats
+    return [VisualFormatOptions(fmt) for fmt in formats]
 
 def parse_positive_int(value: str) -> int:
     try:
         ivalue = int(value)
+
     except ValueError:
         raise argparse.ArgumentTypeError(f'Invalid integer value: {value}')
+    
     if ivalue <= 0:
         raise argparse.ArgumentTypeError(f'Iteration count must be greater than 0, got {ivalue}')
+
     return ivalue

@@ -120,8 +120,8 @@ def get_perf_groups(cfg: ProfilerConfig, cpu_selected: bool, base_env: dict[str,
     for group in cpu_segment.perf_groups:
         group_env = None
         if group.use_ld_env:
-            group_env = base_env.copy()
-            group_env["LD_DEBUG"] = "statistics"
+            group_env                = base_env.copy()
+            group_env["LD_DEBUG"]    = "statistics"
             group_env["LD_BIND_NOW"] = "1"
         
         active_groups.append(

@@ -16,11 +16,12 @@ def repo_to_filename(repository: str, header: str) -> str:
         parts = [part for part in parts if part]
 
         if len(parts) < 2:
-            return "measurements.csv"
+            filename = "measurements.csv"
 
-        account, repo = parts[-2], parts[-1]
-        repo          = re.sub(r"\.git$", "", repo, flags = re.IGNORECASE)
-        filename      = f"{account}_{repo}"
+        else:
+            account, repo = parts[-2], parts[-1]
+            repo          = re.sub(r"\.git$", "", repo, flags = re.IGNORECASE)
+            filename      = f"{account}_{repo}"
 
     header_hash = generate_header_hash(header)
     filename    = f"{filename}_{header_hash}"
@@ -84,7 +85,8 @@ def write_batch(
         measurements[0].metadata.version.repository, 
         measurements[0].to_csv_header()
     )
-    path     = resolve(filename, Path(data_dir))
+    
+    path = resolve(filename, Path(data_dir))
     ensure_dir(path)
 
     written = 0

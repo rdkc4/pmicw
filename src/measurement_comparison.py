@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from comparison_context import ComparisonConfig, MetricStatus, build_comparison_map
+from comparison_context import CSVMetadataCols, ComparisonCols, ComparisonConfig, MetricStatus, build_comparison_map
 from metrics_config import Direction, ProfilerConfig
 
 pd.set_option("display.max_columns",        None)
@@ -46,7 +46,7 @@ def compute_deltas(df: pd.DataFrame, baseline_run_id: str, cfg: ProfilerConfig) 
     if df.empty:
         return pd.DataFrame()
 
-    baseline_rows = df.loc[df["run_id"] == baseline_run_id]
+    baseline_rows = df.loc[df[CSVMetadataCols.RUN_ID] == baseline_run_id]
     if baseline_rows.empty:
         raise ValueError(
             f"Baseline run_id '{baseline_run_id}' not found."
@@ -54,8 +54,8 @@ def compute_deltas(df: pd.DataFrame, baseline_run_id: str, cfg: ProfilerConfig) 
     baseline_row = baseline_rows.iloc[0]
 
     contenders = (
-        df.loc[df["run_id"] != baseline_run_id]
-        .sort_values("timestamp")
+        df.loc[df[CSVMetadataCols.RUN_ID] != baseline_run_id]
+        .sort_values(CSVMetadataCols.TIMESTAMP)
         .reset_index(drop = True)
     )
 
@@ -78,49 +78,49 @@ def compute_deltas(df: pd.DataFrame, baseline_run_id: str, cfg: ProfilerConfig) 
         delta_pct = (delta_abs / baseline_vals) * 100
 
     report_meta = pd.DataFrame({
-        "workload_name":  contenders["workload_name"],
-        "baseline_run":   baseline_run_id,
-        "baseline_args":  baseline_row.get("workload_arguments", "N/A"),
-        "contender_run":  contenders["run_id"],
-        "contender_args": contenders.get("workload_arguments", "N/A"),
-        "timestamp":      contenders["timestamp"]
+        ComparisonCols.WORKLOAD_NAME:    contenders[CSVMetadataCols.WORKLOAD_NAME],
+        ComparisonCols.BASELINE_RUN_ID:  baseline_run_id,
+        ComparisonCols.BASELINE_ARGS:    baseline_row.get(CSVMetadataCols.WORKLOAD_ARGS, "N/A"),
+        ComparisonCols.CONTENDER_RUN_ID: contenders[CSVMetadataCols.RUN_ID],
+        ComparisonCols.CONTENDER_ARGS:   contenders.get(CSVMetadataCols.WORKLOAD_ARGS, "N/A"),
+        ComparisonCols.TIMESTAMP:        contenders[CSVMetadataCols.TIMESTAMP]
     })
 
-    melt_abs  = delta_abs.melt(ignore_index      = False, var_name = "metric", value_name = "delta_abs")
-    melt_pct  = delta_pct.melt(ignore_index      = False, var_name = "metric", value_name = "delta_pct")
-    melt_base = baseline_vals.melt(ignore_index  = False, var_name = "metric", value_name = "baseline_val")
-    melt_curr = contender_vals.melt(ignore_index = False, var_name = "metric", value_name = "contender_val")
+    melt_abs  = delta_abs.melt(ignore_index      = False, var_name = ComparisonCols.METRIC, value_name = ComparisonCols.DELTA_ABS)
+    melt_pct  = delta_pct.melt(ignore_index      = False, var_name = ComparisonCols.METRIC, value_name = ComparisonCols.DELTA_PCT)
+    melt_base = baseline_vals.melt(ignore_index  = False, var_name = ComparisonCols.METRIC, value_name = ComparisonCols.BASELINE_VAL)
+    melt_curr = contender_vals.melt(ignore_index = False, var_name = ComparisonCols.METRIC, value_name = ComparisonCols.CONTENDER_VAL)
 
     result = pd.concat([
         report_meta.loc[melt_abs.index],
         melt_abs,
-        melt_pct["delta_pct"],
-        melt_base["baseline_val"],
-        melt_curr["contender_val"]
+        melt_pct[ComparisonCols.DELTA_PCT],
+        melt_base[ComparisonCols.BASELINE_VAL],
+        melt_curr[ComparisonCols.CONTENDER_VAL]
     ], axis = 1).reset_index(drop = True)
 
-    result["comparison_cfg"] = result["metric"].map(comparison_map)
-    result["status"] = result.apply(
+    result[ComparisonCols.CFG] = result[ComparisonCols.METRIC].map(comparison_map)
+    result[ComparisonCols.STATUS] = result.apply(
         lambda row: classify_metric(
-            baseline_val   = row["baseline_val"],
-            contender_val  = row["contender_val"],
-            delta_abs      = row["delta_abs"],
-            delta_pct      = row["delta_pct"],
-            comparison_cfg = row["comparison_cfg"] if isinstance(row["comparison_cfg"], ComparisonConfig) else ComparisonConfig()
+            baseline_val   = row[ComparisonCols.BASELINE_VAL],
+            contender_val  = row[ComparisonCols.CONTENDER_VAL],
+            delta_abs      = row[ComparisonCols.DELTA_ABS],
+            delta_pct      = row[ComparisonCols.DELTA_PCT],
+            comparison_cfg = row[ComparisonCols.CFG] if isinstance(row[ComparisonCols.CFG], ComparisonConfig) else ComparisonConfig()
         ),
         axis = 1
     )
 
-    result = result.drop(columns=["comparison_cfg"])
-    result["metric"] = pd.Categorical(
-        result["metric"], 
+    result = result.drop(columns=[ComparisonCols.CFG])
+    result[ComparisonCols.METRIC] = pd.Categorical(
+        result[ComparisonCols.METRIC], 
         categories = csv_metric_order, 
         ordered    = True
     )
 
     return result.sort_values(by = [
-        "timestamp",
-        "metric"
+        ComparisonCols.TIMESTAMP,
+        ComparisonCols.METRIC
     ]).reset_index(drop = True)
 
 def main():
