@@ -1,6 +1,7 @@
 import hashlib
 import re
 from pathlib import Path
+import sys
 from typing import Sequence
 
 from measurement import Measurement
@@ -65,7 +66,7 @@ def write(
             f.write(measurement.data_to_csv() + "\n")
 
     except OSError as e:
-        print(f"Failed to write measurement: {e}")
+        print(f"Failed to write measurement: {e}", file = sys.stderr)
         return None
 
     return path
@@ -75,7 +76,7 @@ def write_batch(
     measurements: Sequence[Measurement],
     data_dir:     str | Path = DATA_DIR,
     encoding:     str        = "utf-8",
-) -> tuple[Path, int, int]:
+) -> tuple[Path | None, int, int]:
 
     if not measurements:
         path = resolve("measurements.csv", Path(data_dir))
@@ -106,7 +107,7 @@ def write_batch(
                     errors += 1
 
     except OSError as e:
-        print(f"Failed to write measurements: {e}")
-        raise
+        print(f"Failed to write measurements: {e}", file = sys.stderr)
+        return None, 0, 0
 
     return path, written, errors

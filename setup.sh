@@ -15,6 +15,7 @@ check_command "python3"
 check_command "pip3"
 check_command "perf"
 check_command "rocm-smi"
+check_command "jq"
 
 python3 -c "import venv" 2>/dev/null || missing+=("python3-venv")
 
@@ -27,6 +28,7 @@ if (( ${#missing[@]} > 0 )); then
     echo " $ sudo apt install python3 python3-pip python3-venv"
     echo " $ sudo apt install linux-tools-common linux-tools-generic linux-tools-\$(uname -r)"
     echo " $ sudo apt install rocm-smi-lib || sudo apt install rocm-smi"
+    echo " $ sudo apt install jq
     exit 1
 fi
 

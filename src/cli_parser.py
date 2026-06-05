@@ -39,7 +39,7 @@ CLI Parser for Analysis Runner:
 Expected Syntax:
     [options]
 
-
+Core Structural Rules:
  - [options]
     - `-cmp`, `--compare` - compare current results with n previous results
                           - usage: [--compare <n>], where n > 0

@@ -112,11 +112,8 @@ log_host_posture "BEFORE"
 # pre-conditioning (root)
 sudo bash "$PRE" "$STATE_FILE"
 
-COMMAND=("$RUNNER" "$@")
-
 RUNNER_COMMAND=("$RUNNER")
 COMPARISON_COMMAND=("$COMPARISON")
-
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -168,9 +165,26 @@ while [[ $# -gt 0 ]]; do
 done
 
 if command -v numactl &>/dev/null; then
-    numactl --cpunodebind=0 --membind=0 ${RUNNER_COMMAND[@]}
+    RESULT=$(numactl --cpunodebind=0 --membind=0 ${RUNNER_COMMAND[@]})
 else
-    "${RUNNER_COMMAND[@]}"
+    RESULT=$("${RUNNER_COMMAND[@]}")
+fi
+
+JSON_RESULT=$(echo "$RESULT" | grep -o '{.*}' || true)
+
+if [[ -z "$JSON_RESULT" ]]; then
+    echo "ERROR: No JSON object found in the command output!" >&2
+    exit 1
+fi
+
+RUN_ID=$(echo "$JSON_RESULT" | jq -r '.run_id // empty' 2>/dev/null)
+CSV_PATH=$(echo "$JSON_RESULT" | jq -r '.csv_path // empty' 2>/dev/null)
+
+if [[ -z "$RUN_ID" ]] || [[ -z "$CSV_PATH" ]]; then
+    echo "ERROR: Required keys missing or empty!" >&2
+    echo "Extracted Run ID: '$RUN_ID'" >&2
+    echo "Extracted CSV Path: '$CSV_PATH'" >&2
+    exit 1
 fi
 
 if [[ ${#COMPARISON_COMMAND[@]} -gt 1 ]]; then

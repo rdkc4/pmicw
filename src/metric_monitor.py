@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import subprocess
+import sys
 import threading
 import time
 from typing import Callable
@@ -31,7 +32,7 @@ def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig):
 
         cfg_segment = cfg.segments.get(segment)
         if cfg_segment is None:
-            print(f"Segment '{segment}' not found in config")
+            print(f"Segment '{segment}' not found in config", file = sys.stderr)
             continue
 
         args = [
@@ -206,11 +207,11 @@ def gpu_exists(device_index: int) -> bool:
         total_devices     = len(processor_handles)
         
         if device_index >= total_devices:
-            print(f"Invalid GPU device index {device_index}. Total available devices: {total_devices}")
+            print(f"Invalid GPU device index {device_index}. Total available devices: {total_devices}", file = sys.stderr)
             return False
             
     except Exception as e:
-        print(f"Warning: amdsmi initialization failed during validation: {e}")
+        print(f"Warning: amdsmi initialization failed during validation: {e}", file = sys.stderr)
         return False
 
     finally:
