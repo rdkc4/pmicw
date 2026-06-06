@@ -39,11 +39,27 @@ class Segments(StrEnum):
     LD        = "ld"
     PERF      = "perf"
 
+class Direction(StrEnum):
+    HIGHER_BETTER = "higher_better"
+    LOWER_BETTER  = "lower_better"
+    NEUTRAL       = "neutral"
+
 @dataclass
-class RatioMetric:
-    name:        str
-    numerator:   str
-    denominator: str
+class BaseMetric:
+    name:                      str
+    scale:                     float     = 1.0
+    direction:                 Direction = Direction.NEUTRAL
+    noise_floor_pct:           float     = 0.0
+    improvement_threshold_pct: float     = 0.0
+    regression_threshold_pct:  float     = 0.0
+
+    def output_fields(self) -> list[str]:
+        raise NotImplementedError("Subclasses must implement output_fields()")
+
+@dataclass
+class RatioMetric(BaseMetric):
+    numerator:   str        = ""
+    denominator: str        = ""
     totals:      TotalsSpec = field(default_factory = list)
 
     def output_fields(self) -> list[str]:
@@ -58,9 +74,8 @@ class RatioMetric:
         return fields
 
 @dataclass
-class StatsMetric:
-    name:  str
-    key:   str
+class StatsMetric(BaseMetric):
+    key:   str   = ""
     scale: float = 1.0
     total: bool  = False
 
@@ -73,17 +88,15 @@ class StatsMetric:
         return fields
 
 @dataclass
-class SumMetric:
-    name: str
-    key:  str
+class SumMetric(BaseMetric):
+    key: str = ""
 
     def output_fields(self) -> list[str]:
         return [f"{self.name}_total"]
 
 @dataclass
-class DerivedMetric:
-    name:    str
-    formula: str
+class DerivedMetric(BaseMetric):
+    formula: str = ""
 
     def output_fields(self) -> list[str]:
         return [self.name]
@@ -97,8 +110,6 @@ class DerivedMetric:
         
         return {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
 
-AnyMetric = RatioMetric | StatsMetric | SumMetric | DerivedMetric
-
 @dataclass
 class PerfGroup:
     name:       str
@@ -108,7 +119,7 @@ class PerfGroup:
 @dataclass
 class SegmentConfig:
     name:        str
-    metrics:     list[AnyMetric]
+    metrics:     list[BaseMetric]
     perf_groups: list[PerfGroup] = field(default_factory=list)
 
     def output_fields(self) -> list[str]:
@@ -146,7 +157,7 @@ class SegmentConfig:
 
 @dataclass
 class ProfilerConfig:
-    segments:      dict[str, SegmentConfig]
+    segments: dict[str, SegmentConfig]
 
     def csv_fields(self) -> list[str]:
         fields = []
@@ -188,7 +199,7 @@ def load_config(path: str = "metrics.yaml") -> ProfilerConfig:
             for pg in seg_raw.get("perf_groups", [])
         ]
 
-        metrics: list[AnyMetric] = []
+        metrics: list[BaseMetric] = []
         for m_raw in seg_raw.get("metrics", []):
             metrics.append(parse_metric(seg_name, m_raw))
 
@@ -202,44 +213,65 @@ def load_config(path: str = "metrics.yaml") -> ProfilerConfig:
     validate_derived(cfg)
     return cfg
 
-def parse_metric(seg_name: str, raw: dict) -> AnyMetric:
-    mtype = raw.get("type")
-    name  = raw.get("name")
+def parse_base_metric(raw: dict) -> dict:
+    try:
+        direction = Direction(raw.get("direction", "neutral"))
+    except:
+        direction = Direction.NEUTRAL
+        pass
 
-    if not name:
+    return {
+        "name": raw.get("name"),
+        "scale": float(raw.get("scale", 1.0)),
+        "direction": direction,
+        "noise_floor_pct": float(raw.get("noise_floor_pct", 0.0)),
+        "improvement_threshold_pct": float(raw.get("improvement_threshold_pct", 0.0)),
+        "regression_threshold_pct": float(raw.get("regression_threshold_pct", 0.0))
+    }
+
+def parse_metric(seg_name: str, raw: dict) -> BaseMetric:
+    mtype       = raw.get("type")
+    base_fields = parse_base_metric(raw)
+
+    if not base_fields.get("name"):
         raise ValueError(f"Segment '{seg_name}': metric missing 'name' field.")
     
     if not mtype:
-        raise ValueError(f"Segment '{seg_name}', metric '{name}': missing 'type' field.")
+        raise ValueError(f"Segment '{seg_name}', metric '{base_fields["name"]}': missing 'type' field.")
 
     if mtype == "ratio":
         return RatioMetric(
-            name        = name,
+            **base_fields,
             numerator   = raw["numerator"],
             denominator = raw["denominator"],
-            totals      = raw.get("totals", []),
+            totals      = raw.get("totals", [])
         )
     
     if mtype == "stats":
         return StatsMetric(
-            name  = name,
+            **base_fields,
             key   = raw["key"],
-            scale = float(raw.get("scale", 1.0)),
             total = bool(raw.get("total", False)),
         )
     
     if mtype == "sum":
-        return SumMetric(name = name, key = raw["key"])
+        return SumMetric(
+            **base_fields,
+            key = raw["key"]
+        )
     
     if mtype == "derived":
-        return DerivedMetric(name = name, formula = raw["formula"])
+        return DerivedMetric(
+            **base_fields,
+            formula = raw["formula"]
+        )
 
     raise ValueError(
-        f"Segment '{seg_name}', metric '{name}': unknown type '{mtype}'. "
+        f"Segment '{seg_name}', metric '{base_fields["name"]}': unknown type '{mtype}'. "
         "Expected: ratio | stats | sum | derived"
     )
 
-def  validate_derived(cfg: ProfilerConfig) -> None:
+def validate_derived(cfg: ProfilerConfig) -> None:
     available: set[str] = set()
 
     for segment in cfg.segments.values():

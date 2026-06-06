@@ -1,17 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 2 ]]; then
-    echo "Usage: $0 <workload-runner-path> [options] <workload> [workload-args...]"
-    exit 1
+show_help() {
+    echo "Usage: $0 [options] <workload> [workload-args...]"
+    echo ""
+    echo "[options]:"
+    echo "  -m,    --metric <m>           Gathered metrics (cpu,gpu,memory,thread)"
+    echo "  -it,   --iteration <n>        Number of iterations for workload to run"
+    echo "  -wit,  --warmup-iteration     Number of warmup iterations for workload to run"
+    echo "  -cmp,  --compare <n>          Compare with last 'n' runs"
+    echo "  -cmp2, --compare-two <a> <b>  Compare two explicit run IDs"
+    echo "  -cmpw, --compare-with <id>    Compare current run against a specific baseline ID"
+    echo "  -rfmt, --report-format <f>    Format for analysis output (csv,json,md)"
+    echo "  -vfmt, --visual-format <v>    Visualization type (table,chart,graph)"
+    echo ""
+    exit 0
+}
+
+if [[ $# -lt 1 ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+    show_help
 fi
 
 RUN_ID=$(date +%Y%m%d_%H%M%S)
 POSTURE_FILE="host_posture_${RUN_ID}.log"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 PRE="$SCRIPT_DIR/scripts/host_pre.sh"
 POST="$SCRIPT_DIR/scripts/host_post.sh"
+
+RUNNER="$SCRIPT_DIR/src/workload_runner.py"
+COMPARISON="$SCRIPT_DIR/src/comparison_tool.py"
 
 STATE_FILE="./bench_state_$$.env"
 
@@ -93,16 +112,84 @@ log_host_posture "BEFORE"
 # pre-conditioning (root)
 sudo bash "$PRE" "$STATE_FILE"
 
-# run workload
-RUNNER="$1"
-shift
+RUNNER_COMMAND=("$RUNNER")
+COMPARISON_COMMAND=("$COMPARISON")
 
-COMMAND=("$RUNNER" "$@")
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -cmp|--compare)
+            if [[ -z "${2:-}" ]] || [[ "$2" =~ ^- ]]; then
+                echo "Error: Option $1 requires a positive integer value." >&2
+                show_help
+            fi
+            COMPARISON_COMMAND+=("$1" "$2")
+            shift 2
+            ;;
+        -cmp2|--compare-two)
+            if [[ -z "${2:-}" ]] || [[ "$2" =~ ^- ]] || [[ -z "${3:-}" ]] || [[ "$3" =~ ^- ]]; then
+                echo "Error: Option $1 requires two explicit run ID strings." >&2
+                show_help
+            fi
+            COMPARISON_COMMAND+=("$1" "$2" "$3")
+            shift 3
+            ;;
+        -cmpw|--compare-with)
+            if [[ -z "${2:-}" ]] || [[ "$2" =~ ^- ]]; then
+                echo "Error: Option $1 requires a target run ID string." >&2
+                show_help
+            fi
+            COMPARISON_COMMAND+=("$1" "$2")
+            shift 2
+            ;;
+        -rfmt|--report-format)
+            if [[ -z "${2:-}" ]] || [[ "$2" =~ ^- ]]; then
+                echo "Error: Option $1 requires a format string (csv,json,md)." >&2
+                show_help
+            fi
+            COMPARISON_COMMAND+=("$1" "$2")
+            shift 2
+            ;;
+        -vfmt|--visual-format)
+            if [[ -z "${2:-}" ]] || [[ "$2" =~ ^- ]]; then
+                echo "Error: Option $1 requires a visualization type (table,chart,graph)." >&2
+                show_help
+            fi
+            COMPARISON_COMMAND+=("$1" "$2")
+            shift 2
+            ;;
+        *)
+            RUNNER_COMMAND+=("$1")
+            shift
+            ;;
+    esac
+done
 
 if command -v numactl &>/dev/null; then
-    numactl --cpunodebind=0 --membind=0 "${COMMAND[@]}"
+    RESULT=$(numactl --cpunodebind=0 --membind=0 ${RUNNER_COMMAND[@]})
 else
-    "${COMMAND[@]}"
+    RESULT=$("${RUNNER_COMMAND[@]}")
+fi
+
+JSON_RESULT=$(echo "$RESULT" | grep -o '{.*}' || true)
+
+if [[ -z "$JSON_RESULT" ]]; then
+    echo "ERROR: No JSON object found in the command output!" >&2
+    exit 1
+fi
+
+RUN_ID=$(echo "$JSON_RESULT" | jq -r '.run_id // empty' 2>/dev/null)
+CSV_PATH=$(echo "$JSON_RESULT" | jq -r '.csv_path // empty' 2>/dev/null)
+
+if [[ -z "$RUN_ID" ]] || [[ -z "$CSV_PATH" ]]; then
+    echo "ERROR: Required keys missing or empty!" >&2
+    echo "Extracted Run ID: '$RUN_ID'" >&2
+    echo "Extracted CSV Path: '$CSV_PATH'" >&2
+    exit 1
+fi
+
+if [[ ${#COMPARISON_COMMAND[@]} -gt 1 ]]; then
+    COMPARISON_COMMAND+=("-rid" "$RUN_ID" "-p" "$CSV_PATH")
+    "${COMPARISON_COMMAND[@]}"
 fi
 
 log_host_posture "DURING"

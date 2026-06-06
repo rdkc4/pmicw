@@ -3,6 +3,9 @@ CLI Parsing Module for the Workload Profiler.
 
 This module exposes the command-line interface structure using `argparse`.
 
+
+CLI Parser for Workload Runner:
+
 Expected Syntax:
     [options] <workload> [workload-args]
 
@@ -27,6 +30,23 @@ Core Structural Rules:
     - `-it`, `--iteration` - number of iterations workload should run
                            - default: 1
                            - usage: [--iteration <n>], where n > 0
+
+    - `-help`, `--help` - shows help message and exits
+
+
+CLI Parser for Comparison Tool:
+
+Expected Syntax:
+    [options]
+
+Core Structural Rules:
+ - [options]
+    - `-p`,   `--path`    - path to csv where results of the measurements are stored
+                          - required
+                          - usage: [--path <path>]
+
+    - `-rid`, `--run-id`  - id of the contender run
+                          - usage: [--run-id <id>]
 
     - `-cmp`, `--compare` - compare current results with n previous results
                           - usage: [--compare <n>], where n > 0
@@ -54,27 +74,41 @@ Core Structural Rules:
 
 import argparse
 from typing import TypeAlias
+from enum import StrEnum
 
-MetricSelection: TypeAlias = list[str]
-ReportFormats:   TypeAlias = list[str]
-VisualFormats:   TypeAlias = list[str]
+class MetricOptions(StrEnum):
+    WALL_TIME = 'wall-time'
+    CPU       = 'cpu'
+    GPU       = 'gpu'
+    MEMORY    = 'memory'
+    THREAD    = 'thread'
 
-METRICS        = {'wall-time', 'cpu', 'gpu', 'memory', 'thread'}
-REPORT_FORMATS = {'csv', 'md', 'json'}
-VISUAL_FORMATS = {'table', 'chart', 'graph'}
+class ReportFormatOptions(StrEnum):
+    CSV  = 'csv'
+    MD   = 'md'
+    JSON = 'json'
 
-def parse_args() -> argparse.Namespace:
-    parser = create_cli_parser()
+class VisualFormatOptions(StrEnum):
+    TABLE = 'table'
+    CHART = 'chart'
+    GRAPH = 'graph'
+
+MetricSelection: TypeAlias = list[MetricOptions]
+ReportFormats:   TypeAlias = list[ReportFormatOptions]
+VisualFormats:   TypeAlias = list[VisualFormatOptions]
+
+def parse_runner_args() -> argparse.Namespace:
+    parser = create_runner_cli_parser()
     return parser.parse_args()
 
-def create_cli_parser() -> argparse.ArgumentParser:
+def create_runner_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        'cli-parser', 
-        usage    = '%(prog)s [options] <workload> [workload-args...]', 
+        'runner-cli-parser',
+        usage    = '%(prog)s [options] <workload> [workload-args...]',
         add_help = False
     )
 
-    add_options(parser)
+    add_runner_options(parser)
     add_workload_args(parser)
 
     return parser
@@ -91,7 +125,7 @@ def add_workload_args(parser: argparse.ArgumentParser) -> None:
         help    = 'arguments for the workload separated by space'
     )
 
-def add_options(parser: argparse.ArgumentParser) -> None:
+def add_runner_options(parser: argparse.ArgumentParser) -> None:
     options = parser.add_argument_group('options')
 
     options.add_argument(
@@ -116,6 +150,49 @@ def add_options(parser: argparse.ArgumentParser) -> None:
     )
 
     options.add_argument(
+        '-h', '--help',
+        action = 'help',
+        help   = 'show this help message and exit'
+    )
+
+def parse_metrics(metrics_str: str) -> MetricSelection:
+    metrics = [metric.strip() for metric in metrics_str.split(',')]
+
+    invalid = set(metrics) - set(MetricOptions)
+    if invalid:
+        raise argparse.ArgumentTypeError(f'invalid metrics: {", ".join(invalid)}')
+    
+    return [MetricOptions(metric) for metric in metrics]
+
+def parse_comparison_args() -> argparse.Namespace:
+    parser = create_comparison_cli_parser()
+    return parser.parse_args()
+
+def create_comparison_cli_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        'comparison-cli-parser',
+        usage    = '%(prog)s [options]',
+        add_help = False
+    )
+    add_comparison_options(parser)
+
+    return parser
+
+def add_comparison_options(parser: argparse.ArgumentParser) -> None:
+    options = parser.add_argument_group('options')
+
+    options.add_argument(
+        '-p', '--path',
+        required = True,
+        help     = 'path to csv file of the results'
+    )
+
+    options.add_argument(
+        '-rid', '--run-id',
+        help = 'id of the contender run'
+    )
+
+    options.add_argument(
         '-cmp', '--compare',
         type = parse_positive_int,
         help = 'compare with a specific number of previous runs'
@@ -129,8 +206,8 @@ def add_options(parser: argparse.ArgumentParser) -> None:
 
     options.add_argument(
         '-cmpw', '--compare-with',
-        nargs = 1,
-        help  = 'compare current run with a specific run by its run ID'
+        type = str,
+        help = 'compare current run with a specific run by its run ID'
     )
 
     options.add_argument(
@@ -153,44 +230,32 @@ def add_options(parser: argparse.ArgumentParser) -> None:
         help   = 'show this help message and exit'
     )
 
-def parse_metrics(metrics_str: str) -> MetricSelection:
-    metrics = [m.strip() for m in metrics_str.split(',')]
-
-    invalid = set(metrics) - METRICS
-    if invalid:
-        raise argparse.ArgumentTypeError(
-            f'invalid metrics: {", ".join(sorted(invalid))}'
-        )
-
-    return metrics
-
 def parse_report_formats(formats_str: str) -> ReportFormats:
-    formats = [f.strip() for f in formats_str.split(',')]
+    formats = [fmt.strip() for fmt in formats_str.split(',')]
 
-    invalid = set(formats) - REPORT_FORMATS
+    invalid = set(formats) - set(ReportFormatOptions)
     if invalid:
-        raise argparse.ArgumentTypeError(
-            f'invalid report formats: {", ".join(sorted(invalid))}'
-        )
+        raise argparse.ArgumentTypeError(f'invalid report formats: {", ".join(sorted(invalid))}')
 
-    return formats
+    return [ReportFormatOptions(fmt) for fmt in formats]
 
 def parse_visual_formats(formats_str: str) -> VisualFormats:
-    formats = [f.strip() for f in formats_str.split(',')]
+    formats = [fmt.strip() for fmt in formats_str.split(',')]
 
-    invalid = set(formats) - VISUAL_FORMATS
+    invalid = set(formats) - set(VisualFormatOptions)
     if invalid:
-        raise argparse.ArgumentTypeError(
-            f'invalid visual formats: {", ".join(sorted(invalid))}'
-        )
+        raise argparse.ArgumentTypeError(f'invalid visual formats: {", ".join(sorted(invalid))}')
 
-    return formats
+    return [VisualFormatOptions(fmt) for fmt in formats]
 
 def parse_positive_int(value: str) -> int:
     try:
         ivalue = int(value)
+
     except ValueError:
         raise argparse.ArgumentTypeError(f'Invalid integer value: {value}')
+    
     if ivalue <= 0:
         raise argparse.ArgumentTypeError(f'Iteration count must be greater than 0, got {ivalue}')
+
     return ivalue

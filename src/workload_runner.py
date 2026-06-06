@@ -32,14 +32,15 @@ Usage:
     $ ./workload_runner.py [options] <workload> [workload-args...]
 """
 import argparse
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+import json
 import subprocess
 import sys
 import threading
 import time
 import os
 
-from cli_parser import parse_args
+from cli_parser import parse_runner_args
 from measurement import Measurement, Metadata, Metrics, Workload
 from metric_computer import compute_records
 from metric_monitor import start_monitoring
@@ -47,6 +48,14 @@ from metrics_config import PerfGroupConfig, ProfilerConfig, Segments, load_confi
 from record_parser import parse_cpu_prof_output
 from csv_writer import write
 from workload_context import WorkloadContext, WorkloadMetricSelection, WorkloadMonitors
+
+@dataclass
+class RunnerResult:
+    run_id:   str
+    csv_path: str
+
+    def to_json(self):
+        return json.dumps(asdict(self))
 
 def run_workload(ctx: WorkloadContext, cfg: ProfilerConfig) -> dict[str, Metrics]:
     perf_event_groups = get_perf_groups(cfg, ctx.selected_metrics.cpu, ctx.env)
@@ -121,8 +130,8 @@ def get_perf_groups(cfg: ProfilerConfig, cpu_selected: bool, base_env: dict[str,
     for group in cpu_segment.perf_groups:
         group_env = None
         if group.use_ld_env:
-            group_env = base_env.copy()
-            group_env["LD_DEBUG"] = "statistics"
+            group_env                = base_env.copy()
+            group_env["LD_DEBUG"]    = "statistics"
             group_env["LD_BIND_NOW"] = "1"
         
         active_groups.append(
@@ -181,7 +190,7 @@ def assemble_measurement(workload: Workload, metrics: dict[str, Metrics], cfg: P
     )
 
 def main():
-    args     = parse_args()
+    args     = parse_runner_args()
     cfg      = load_config("config/metrics_config.yaml")
     ctx      = setup_workload_context(args, cfg)
     workload = assemble_workload(args)
@@ -190,11 +199,17 @@ def main():
         metrics = run_workload(ctx, cfg)
 
     except RuntimeError as e:
-        print(f"Error: {e}")
+        print(f"Error: {e}", file = sys.stderr)
         sys.exit(1)
 
     measurement = assemble_measurement(workload, metrics, cfg)
-    write(measurement)
+    path = write(measurement)
+
+    if not path:
+        sys.exit(1)
+
+    result = RunnerResult(str(measurement.metadata.run_id), str(path))
+    print(result.to_json(), file = sys.stdout)
 
 if __name__ == "__main__":
     main()

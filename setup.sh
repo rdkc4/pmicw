@@ -15,6 +15,7 @@ check_command "python3"
 check_command "pip3"
 check_command "perf"
 check_command "rocm-smi"
+check_command "jq"
 
 python3 -c "import venv" 2>/dev/null || missing+=("python3-venv")
 
@@ -27,6 +28,7 @@ if (( ${#missing[@]} > 0 )); then
     echo " $ sudo apt install python3 python3-pip python3-venv"
     echo " $ sudo apt install linux-tools-common linux-tools-generic linux-tools-\$(uname -r)"
     echo " $ sudo apt install rocm-smi-lib || sudo apt install rocm-smi"
+    echo " $ sudo apt install jq"
     exit 1
 fi
 
@@ -45,11 +47,12 @@ chmod +x run.sh
 
 echo "Setup [5/6]: Making Python modules executable..."
 chmod +x src/workload_runner.py
+chmod +x src/comparison_tool.py
 
 echo "Setup [6/6]: Setup complete"
 echo
 echo "To run a workload, use:"
 echo "  $ source .venv/bin/activate"
-echo "  $ ./run.sh <workload-runner-path> [options] <workload> [workload-args...]"
+echo "  $ ./run.sh [options] <workload> [workload-args...]"
 echo
-echo "  Example: $ ./run.sh ./src/workload_runner.py -m cpu,gpu,memory workload arg1 arg2"
+echo "  Example: $ ./run.sh -rfmt csv,md,json -m cpu,gpu,memory workload arg1 arg2"
