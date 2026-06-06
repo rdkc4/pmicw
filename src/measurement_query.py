@@ -8,21 +8,30 @@ def get_connection():
 def base_table(csv_path: str) -> str:
     return f"read_csv_auto('{csv_path}')"
 
-def fetch_last_n(n: int, workload: str, csv_path: str) -> str:
-    where_clause = f"WHERE workload_name = '{workload}'"
+def fetch_last_n(n: int, contender_id: str, csv_path: str) -> str:
+    table     = base_table(csv_path)
+    condition = f"run_id = '{contender_id}'"
 
     return f"""
-    SELECT *
-    FROM {base_table(csv_path)}
-    {where_clause}
-    QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY workload_name
+    WITH contender AS (
+        SELECT *
+        FROM {table}
+        WHERE {condition}
+    ),
+    baselines AS (
+        SELECT *
+        FROM {table}
+        WHERE NOT ({condition})
         ORDER BY timestamp DESC
-    ) <= {n}
+        LIMIT {n}
+    )
+    SELECT * FROM baselines
+    UNION ALL
+    SELECT * FROM contender
     """
 
-def fetch_two(run_id_1: str, run_id_2: str, workload: str, csv_path: str) -> str:
-    where_clause = f"WHERE run_id IN ('{run_id_1}', '{run_id_2}') AND workload_name = '{workload}'"
+def fetch_two(baseline_id: str, contender_id: str, csv_path: str) -> str:
+    where_clause = f"WHERE run_id IN ('{baseline_id}', '{contender_id}')"
     
     return f"""
     SELECT *
@@ -30,8 +39,8 @@ def fetch_two(run_id_1: str, run_id_2: str, workload: str, csv_path: str) -> str
     {where_clause}
     """
 
-def fetch(run_id: str, workload: str, csv_path: str) -> str:
-    where_clause = f"WHERE run_id = '{run_id}' AND workload_name = '{workload}'"
+def fetch(run_id: str, csv_path: str) -> str:
+    where_clause = f"WHERE run_id = '{run_id}'"
     
     return f"""
     SELECT *

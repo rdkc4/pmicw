@@ -1,16 +1,16 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-from comparison_context import CSVMetadataCols, ComparisonCols, ComparisonConfig, MetricStatus, build_comparison_map
+from comparison_context import (
+    CSVMetadataCols, 
+    ComparisonCols, 
+    ComparisonConfig, 
+    MetricStatus, 
+    build_comparison_map
+)
 from metrics_config import Direction, ProfilerConfig
-
-pd.set_option("display.max_columns",        None)
-pd.set_option("display.max_rows",           None)
-pd.set_option("display.width",             10000)
-pd.set_option("display.expand_frame_repr", False)
 
 def classify_metric(
     baseline_val:   float,
@@ -42,48 +42,48 @@ def classify_metric(
 
     return MetricStatus.INTERESTING
 
-def compute_deltas(df: pd.DataFrame, baseline_run_id: str, cfg: ProfilerConfig) -> pd.DataFrame:
+def compute_deltas(df: pd.DataFrame, contender_id: str, cfg: ProfilerConfig) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame()
 
-    baseline_rows = df.loc[df[CSVMetadataCols.RUN_ID] == baseline_run_id]
-    if baseline_rows.empty:
+    contender_rows = df.loc[df[CSVMetadataCols.RUN_ID] == contender_id]
+    if contender_rows.empty:
         raise ValueError(
-            f"Baseline run_id '{baseline_run_id}' not found."
+            f"Contender run_id '{contender_id}' not found."
         )
-    baseline_row = baseline_rows.iloc[0]
+    contender_row = contender_rows.iloc[0]
 
-    contenders = (
-        df.loc[df[CSVMetadataCols.RUN_ID] != baseline_run_id]
+    baselines = (
+        df.loc[df[CSVMetadataCols.RUN_ID] != contender_id]
         .sort_values(CSVMetadataCols.TIMESTAMP)
         .reset_index(drop = True)
     )
 
-    if contenders.empty:
+    if baselines.empty:
         return pd.DataFrame()
 
     comparison_map   = build_comparison_map(cfg)
-    numeric_cols     = contenders.select_dtypes(include = "number").columns
+    numeric_cols     = baselines.select_dtypes(include = "number").columns
     csv_metric_order = list(numeric_cols)
-    baseline_vals    = pd.DataFrame(
-        [baseline_row[numeric_cols].values] * len(contenders),
+    contender_vals   = pd.DataFrame(
+        [contender_row[numeric_cols].values] * len(baselines),
         columns = numeric_cols,
-        index   = contenders.index
+        index   = baselines.index
     )
 
-    contender_vals = contenders[numeric_cols]
+    baseline_vals = baselines[numeric_cols]
+    delta_abs     = contender_vals - baseline_vals
 
-    delta_abs = contender_vals - baseline_vals
     with np.errstate(divide = "ignore", invalid = "ignore"):
         delta_pct = (delta_abs / baseline_vals) * 100
 
     report_meta = pd.DataFrame({
-        ComparisonCols.WORKLOAD_NAME:    contenders[CSVMetadataCols.WORKLOAD_NAME],
-        ComparisonCols.BASELINE_RUN_ID:  baseline_run_id,
-        ComparisonCols.BASELINE_ARGS:    baseline_row.get(CSVMetadataCols.WORKLOAD_ARGS, "N/A"),
-        ComparisonCols.CONTENDER_RUN_ID: contenders[CSVMetadataCols.RUN_ID],
-        ComparisonCols.CONTENDER_ARGS:   contenders.get(CSVMetadataCols.WORKLOAD_ARGS, "N/A"),
-        ComparisonCols.TIMESTAMP:        contenders[CSVMetadataCols.TIMESTAMP]
+        ComparisonCols.WORKLOAD_NAME:    baselines[CSVMetadataCols.WORKLOAD_NAME],
+        ComparisonCols.BASELINE_RUN_ID:  baselines[CSVMetadataCols.RUN_ID],
+        ComparisonCols.BASELINE_ARGS:    baselines.get(CSVMetadataCols.WORKLOAD_ARGS, "N/A"),
+        ComparisonCols.CONTENDER_RUN_ID: contender_id,
+        ComparisonCols.CONTENDER_ARGS:   contender_row.get(CSVMetadataCols.WORKLOAD_ARGS, "N/A"),
+        ComparisonCols.TIMESTAMP:        baselines[CSVMetadataCols.TIMESTAMP]
     })
 
     melt_abs  = delta_abs.melt(ignore_index      = False, var_name = ComparisonCols.METRIC, value_name = ComparisonCols.DELTA_ABS)
@@ -122,9 +122,3 @@ def compute_deltas(df: pd.DataFrame, baseline_run_id: str, cfg: ProfilerConfig) 
         ComparisonCols.TIMESTAMP,
         ComparisonCols.METRIC
     ]).reset_index(drop = True)
-
-def main():
-    print("TODO...")
-
-if __name__ == "__main__":
-    main()

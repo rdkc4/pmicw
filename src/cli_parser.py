@@ -34,13 +34,20 @@ Core Structural Rules:
     - `-help`, `--help` - shows help message and exits
 
 
-CLI Parser for Analysis Runner:
+CLI Parser for Comparison Tool:
 
 Expected Syntax:
     [options]
 
 Core Structural Rules:
  - [options]
+    - `-p`,   `--path`    - path to csv where results of the measurements are stored
+                          - required
+                          - usage: [--path <path>]
+
+    - `-rid`, `--run-id`  - id of the contender run
+                          - usage: [--run-id <id>]
+
     - `-cmp`, `--compare` - compare current results with n previous results
                           - usage: [--compare <n>], where n > 0
 
@@ -157,22 +164,33 @@ def parse_metrics(metrics_str: str) -> MetricSelection:
     
     return [MetricOptions(metric) for metric in metrics]
 
-def parse_analysis_args() -> argparse.Namespace:
-    parser = create_analysis_cli_parser()
+def parse_comparison_args() -> argparse.Namespace:
+    parser = create_comparison_cli_parser()
     return parser.parse_args()
 
-def create_analysis_cli_parser() -> argparse.ArgumentParser:
+def create_comparison_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        'analysis-cli-parser',
+        'comparison-cli-parser',
         usage    = '%(prog)s [options]',
         add_help = False
     )
-    add_analysis_options(parser)
+    add_comparison_options(parser)
 
     return parser
 
-def add_analysis_options(parser: argparse.ArgumentParser) -> None:
+def add_comparison_options(parser: argparse.ArgumentParser) -> None:
     options = parser.add_argument_group('options')
+
+    options.add_argument(
+        '-p', '--path',
+        required = True,
+        help     = 'path to csv file of the results'
+    )
+
+    options.add_argument(
+        '-rid', '--run-id',
+        help = 'id of the contender run'
+    )
 
     options.add_argument(
         '-cmp', '--compare',

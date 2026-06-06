@@ -28,7 +28,7 @@ if (( ${#missing[@]} > 0 )); then
     echo " $ sudo apt install python3 python3-pip python3-venv"
     echo " $ sudo apt install linux-tools-common linux-tools-generic linux-tools-\$(uname -r)"
     echo " $ sudo apt install rocm-smi-lib || sudo apt install rocm-smi"
-    echo " $ sudo apt install jq
+    echo " $ sudo apt install jq"
     exit 1
 fi
 
@@ -47,7 +47,7 @@ chmod +x run.sh
 
 echo "Setup [5/6]: Making Python modules executable..."
 chmod +x src/workload_runner.py
-chmod +x src/measurement_comparison.py
+chmod +x src/comparison_tool.py
 
 echo "Setup [6/6]: Setup complete"
 echo

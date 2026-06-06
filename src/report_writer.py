@@ -1,3 +1,4 @@
+import datetime
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -117,4 +118,5 @@ def write_md_report(report_data: dict, output_path: Path) -> None:
     output_path.write_text("\n".join(lines), encoding = "utf-8")
 
 def generate_report_path(relative_path, format: str) -> Path:
-    return REPORT_DIR / f"{relative_path}.{format}"
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    return REPORT_DIR / f"{relative_path}_{timestamp}.{format}"

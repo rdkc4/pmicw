@@ -30,7 +30,7 @@ PRE="$SCRIPT_DIR/scripts/host_pre.sh"
 POST="$SCRIPT_DIR/scripts/host_post.sh"
 
 RUNNER="$SCRIPT_DIR/src/workload_runner.py"
-COMPARISON="$SCRIPT_DIR/src/measurement_comparison.py"
+COMPARISON="$SCRIPT_DIR/src/comparison_tool.py"
 
 STATE_FILE="./bench_state_$$.env"
 
@@ -188,6 +188,7 @@ if [[ -z "$RUN_ID" ]] || [[ -z "$CSV_PATH" ]]; then
 fi
 
 if [[ ${#COMPARISON_COMMAND[@]} -gt 1 ]]; then
+    COMPARISON_COMMAND+=("-rid" "$RUN_ID" "-p" "$CSV_PATH")
     "${COMPARISON_COMMAND[@]}"
 fi
 
