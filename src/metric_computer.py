@@ -49,8 +49,8 @@ def compute_metrics(cfg: ProfilerConfig, flat_records: FlatRecords) -> dict[str,
     return structured_metrics
 
 def compute_segment(
-    segment:       SegmentConfig, 
-    flat_records:  FlatRecords, 
+    segment:        SegmentConfig, 
+    flat_records:   FlatRecords, 
     global_record:  Record, 
     segment_record: Record
 ) -> None:
@@ -86,13 +86,16 @@ def apply_ratio(metric: RatioMetric, flat_records: FlatRecords, global_record: R
 
     if "numerator" in metric.totals:
         key = total_key(metric.numerator)
-        global_record[key] = segment_record[key] = total_numerator
+        global_record[key] = segment_record[key] = total_numerator * metric.scale
 
     if "denominator" in metric.totals:
         key = total_key(metric.denominator)
-        global_record[key] = segment_record[key] = total_denominator
+        global_record[key] = segment_record[key] = total_denominator * metric.scale
 
-    for field, value in zip((f"{metric.name}_{suffix}" for suffix in STATS_SUFFIX), compute_stats(ratios)):
+    ratio_stats = compute_stats(ratios)
+    ratio_stats = tuple(val * metric.scale for val in ratio_stats)
+
+    for field, value in zip((f"{metric.name}_{suffix}" for suffix in STATS_SUFFIX), ratio_stats):
         global_record[field] = segment_record[field] = value
 
 
@@ -112,7 +115,11 @@ def apply_stats(metric: StatsMetric, flat_records: FlatRecords, global_record: R
 
 def apply_sum(metric: SumMetric, flat_records: FlatRecords, global_record: Record, segment_record: Record) -> None:
     values = flat_records.get(metric.key, [])
-    key    = f"{metric.name}_total"
+    
+    if metric.scale != 1:
+        values = [val * metric.scale for val in values]
+
+    key = f"{metric.name}_total"
     global_record[key] = segment_record[key] = sum(values)
 
 
@@ -132,7 +139,7 @@ def apply_derived(metric: DerivedMetric, global_record: Record, segment_record: 
             f"Formula: {metric.formula}"
         ) from e
 
-    global_record[metric.name] = segment_record[metric.name] = float(result)
+    global_record[metric.name] = segment_record[metric.name] = float(result) * metric.scale
 
 def compute_stats(values: list[float]) -> tuple[float, float, float, float, float]:
     if not values:
