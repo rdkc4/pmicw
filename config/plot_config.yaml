@@ -1,0 +1,34 @@
+plot_groups:
+  performance:
+    metrics:
+      - name: wall_time_ms
+        suffix: mean
+      - name: task_clock_ms
+        suffix: mean
+
+  memory:
+    metrics:
+      - name: rss_mb
+        suffix: mean
+      - name: vms_mb
+        suffix: mean
+
+  gpu:
+    metrics:
+      - name: gpu_activity_pct
+        suffix: mean
+      - name: gpu_vram_pct
+        suffix: mean
+
+  thread:
+    metrics:
+      - name: thread_utilization_pct
+
+  startup:
+    metrics:
+      - name: cycles
+        suffix: mean
+      - name: linker_cycles
+        suffix: mean
+      - name: startup_time_ms
+        suffix: mean
