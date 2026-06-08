@@ -1,0 +1,144 @@
+# THreshold semantics:
+# - direction                 : lower_better, higher_better, neutral
+#                               lower_better  => lower values mean improvement
+#                               higher_better => higher values mean improvement
+#                               neutral       => doesn't directly affect performance
+#
+# - noise_floor_pct           : detects noise if abs(delta_pct) <= noise_floor_pct
+#                               note: noise_floor_pct should be non-negative number
+#
+# - improvement_threshold_pct : detects improvement if delta_pct <= -improvement_threshold_pct (for lower_better)
+#                               detects improvement if delta_pct >=  improvement_threshold_pct (for higher_better)
+#                               note: improvement_threshold_pct should be non-negative number
+#  
+# - regression_threshold_pct  : detects regression if delta_pct >=  regression_threshold_pct (for lower_better)
+#                               detects regression if delta_pct <= -regression_threshold_pct (for higher_better)
+#                               note: improvement_threshold_pct should be non-negative number
+#
+
+thresholds:
+
+  wall_time_ms:
+    direction: lower_better
+    noise_floor_pct: 5.0
+    improvement_threshold_pct: 5.0
+    regression_threshold_pct: 5.0
+
+
+  ipc:
+    direction: higher_better
+    noise_floor_pct: 1.0
+    improvement_threshold_pct: 2.0
+    regression_threshold_pct: 2.0
+
+  task_clock_ms:
+    direction: lower_better
+    noise_floor_pct: 5.0
+    improvement_threshold_pct: 5.0
+    regression_threshold_pct: 5.0
+
+  branch_miss_rate_pct:
+    direction: lower_better
+    noise_floor_pct: 0.5
+    improvement_threshold_pct: 1.0
+    regression_threshold_pct: 1.0
+
+  l1d_miss_rate_pct:
+    direction: lower_better
+    noise_floor_pct: 0.5
+    improvement_threshold_pct: 1.0
+    regression_threshold_pct: 1.0
+
+  l1i_miss_rate_pct:
+    direction: lower_better
+    noise_floor_pct: 0.5
+    improvement_threshold_pct: 1.0
+    regression_threshold_pct: 1.0
+
+  l2_miss_rate_pct:
+    direction: lower_better
+    noise_floor_pct: 0.5
+    improvement_threshold_pct: 1.0
+    regression_threshold_pct: 1.0
+
+  llc_miss_rate_pct:
+    direction: lower_better
+    noise_floor_pct: 0.5
+    improvement_threshold_pct: 1.0
+    regression_threshold_pct: 1.0
+
+
+  gpu_activity_pct:
+    direction: higher_better
+    noise_floor_pct: 2.0
+    improvement_threshold_pct: 3.0
+    regression_threshold_pct: 3.0
+
+  gpu_vram_pct:
+    direction: lower_better
+    noise_floor_pct: 2.0
+    improvement_threshold_pct: 3.0
+    regression_threshold_pct: 3.0
+
+
+  rss_mb:
+    direction: lower_better
+    noise_floor_pct: 5.0
+    improvement_threshold_pct: 5.0
+    regression_threshold_pct: 5.0
+
+  vms_mb:
+    direction: lower_better
+    noise_floor_pct: 1.0
+    improvement_threshold_pct: 2.0
+    regression_threshold_pct: 2.0
+
+  page_faults:
+    direction: lower_better
+    noise_floor_pct: 1.0
+    improvement_threshold_pct: 2.0
+    regression_threshold_pct: 2.0
+
+  minor_faults:
+    direction: lower_better
+    noise_floor_pct: 1.0
+    improvement_threshold_pct: 2.0
+    regression_threshold_pct: 2.0
+
+  major_faults:
+    direction: lower_better
+    noise_floor_pct: 1.0
+    improvement_threshold_pct: 2.0
+    regression_threshold_pct: 2.0
+
+
+  linker_cycles:
+    direction: lower_better
+    noise_floor_pct: 2.0
+    improvement_threshold_pct: 3.0
+    regression_threshold_pct: 3.0
+
+  startup_time_ms:
+    direction: lower_better
+    noise_floor_pct: 5.0
+    improvement_threshold_pct: 5.0
+    regression_threshold_pct: 5.0
+
+
+  context_switches:
+    direction: lower_better
+    noise_floor_pct: 1.0
+    improvement_threshold_pct: 2.0
+    regression_threshold_pct: 2.0
+
+  thread_count:
+    direction: neutral
+    noise_floor_pct: 0.0
+    improvement_threshold_pct: 0.0
+    regression_threshold_pct: 0.0
+
+  thread_utilization_pct:
+    direction: higher_better
+    noise_floor_pct: 2.0
+    improvement_threshold_pct: 3.0
+    regression_threshold_pct: 3.0

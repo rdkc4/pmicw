@@ -1,7 +1,8 @@
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import StrEnum
 
-from metrics_config import Direction, ProfilerConfig
+from metrics_config import ProfilerConfig
 
 class MetricStatus(StrEnum):
     NOISE       = "noise"
@@ -37,29 +38,14 @@ class ComparisonCols(StrEnum):
     UNIT             = "unit"
     STATUS           = "status"
 
-@dataclass
-class ComparisonConfig:
-    direction:                 Direction = Direction.NEUTRAL
-    noise_floor_pct:           float     = 0.0
-    improvement_threshold_pct: float     = 0.0
-    regression_threshold_pct:  float     = 0.0
-
-
-def build_comparison_map(cfg: ProfilerConfig) -> dict[str, ComparisonConfig]:
-    comparison_map = {}
+def build_segment_map(cfg: ProfilerConfig) -> dict[str, set[str]]:
+    segment_map = defaultdict(set)
 
     for segment in cfg.segments.values():
         for metric in segment.metrics:
-            config_instance = ComparisonConfig(
-                direction                 = metric.direction,
-                noise_floor_pct           = metric.noise_floor_pct,
-                improvement_threshold_pct = metric.improvement_threshold_pct,
-                regression_threshold_pct  = metric.regression_threshold_pct
-            )
-            
-            comparison_map[metric.name] = config_instance
+            segment_map[segment.name].add(metric.name)
             
             for structural_field in metric.output_fields():
-                comparison_map[structural_field] = config_instance
+                segment_map[segment.name].add(structural_field)
 
-    return comparison_map
+    return dict(segment_map)

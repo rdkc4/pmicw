@@ -39,19 +39,10 @@ class Segments(StrEnum):
     LD        = "ld"
     PERF      = "perf"
 
-class Direction(StrEnum):
-    HIGHER_BETTER = "higher_better"
-    LOWER_BETTER  = "lower_better"
-    NEUTRAL       = "neutral"
-
 @dataclass
 class BaseMetric:
-    name:                      str
-    scale:                     float     = 1.0
-    direction:                 Direction = Direction.NEUTRAL
-    noise_floor_pct:           float     = 0.0
-    improvement_threshold_pct: float     = 0.0
-    regression_threshold_pct:  float     = 0.0
+    name:  str
+    scale: float = 1.0
 
     def output_fields(self) -> list[str]:
         raise NotImplementedError("Subclasses must implement output_fields()")
@@ -214,19 +205,9 @@ def load_config(path: str = "metrics.yaml") -> ProfilerConfig:
     return cfg
 
 def parse_base_metric(raw: dict) -> dict:
-    try:
-        direction = Direction(raw.get("direction", "neutral"))
-    except:
-        direction = Direction.NEUTRAL
-        pass
-
     return {
         "name": raw.get("name"),
-        "scale": float(raw.get("scale", 1.0)),
-        "direction": direction,
-        "noise_floor_pct": float(raw.get("noise_floor_pct", 0.0)),
-        "improvement_threshold_pct": float(raw.get("improvement_threshold_pct", 0.0)),
-        "regression_threshold_pct": float(raw.get("regression_threshold_pct", 0.0))
+        "scale": float(raw.get("scale", 1.0))
     }
 
 def parse_metric(seg_name: str, raw: dict) -> BaseMetric:
