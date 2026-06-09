@@ -144,7 +144,7 @@ def get_perf_groups(cfg: ProfilerConfig, cpu_selected: bool, base_env: dict[str,
 
     return active_groups
 
-def setup_workload_context(args: argparse.Namespace, cfg: ProfilerConfig):
+def setup_workload_context(args: argparse.Namespace):
     env = os.environ.copy()
 
     metrics = WorkloadMetricSelection(
@@ -192,7 +192,7 @@ def assemble_measurement(workload: Workload, metrics: dict[str, Metrics], cfg: P
 def main():
     args     = parse_runner_args()
     cfg      = load_config("config/metrics_config.yaml")
-    ctx      = setup_workload_context(args, cfg)
+    ctx      = setup_workload_context(args)
     workload = assemble_workload(args)
 
     try:

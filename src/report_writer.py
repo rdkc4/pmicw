@@ -17,7 +17,7 @@ MD_REPORT_ROW_COLORS = {
     MetricStatus.IRRELEVANT:  "background-color: transparent; color: #555555;"
 }
 
-def write_report(df: pd.DataFrame, report_formats: list[str], report_path: str) -> None:
+def write_report(df: pd.DataFrame, report_formats: list[ReportFormatOptions], report_path: str) -> None:
     report_data = {ComparisonCols.COMPARISON: []}
     grouped     = df.groupby(["baseline_run_id", "contender_run_id"], sort = False)
 

@@ -3,21 +3,19 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from comparison_config import Direction, ThresholdConfig
 from comparison_context import (
     CSVMetadataCols, 
-    ComparisonCols, 
-    ComparisonConfig, 
-    MetricStatus, 
-    build_comparison_map
+    ComparisonCols,  
+    MetricStatus
 )
-from metrics_config import Direction, ProfilerConfig
 
 def classify_metric(
     baseline_val:   float,
     contender_val:  float,
     delta_abs:      float,
     delta_pct:      float,
-    comparison_cfg: ComparisonConfig
+    comparison_cfg: ThresholdConfig
 ) -> MetricStatus:
 
     if any(pd.isna([baseline_val, contender_val, delta_abs, delta_pct])) or np.isinf(delta_abs) or np.isinf(delta_pct):
@@ -42,7 +40,7 @@ def classify_metric(
 
     return MetricStatus.INTERESTING
 
-def compute_deltas(df: pd.DataFrame, contender_id: str, cfg: ProfilerConfig) -> pd.DataFrame:
+def compute_deltas(df: pd.DataFrame, contender_id: str, comparison_map: dict[str, ThresholdConfig]) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame()
 
@@ -62,7 +60,6 @@ def compute_deltas(df: pd.DataFrame, contender_id: str, cfg: ProfilerConfig) -> 
     if baselines.empty:
         return pd.DataFrame()
 
-    comparison_map   = build_comparison_map(cfg)
     numeric_cols     = baselines.select_dtypes(include = "number").columns
     csv_metric_order = list(numeric_cols)
     contender_vals   = pd.DataFrame(
@@ -106,12 +103,12 @@ def compute_deltas(df: pd.DataFrame, contender_id: str, cfg: ProfilerConfig) -> 
             contender_val  = row[ComparisonCols.CONTENDER_VAL],
             delta_abs      = row[ComparisonCols.DELTA_ABS],
             delta_pct      = row[ComparisonCols.DELTA_PCT],
-            comparison_cfg = row[ComparisonCols.CFG] if isinstance(row[ComparisonCols.CFG], ComparisonConfig) else ComparisonConfig()
+            comparison_cfg = row[ComparisonCols.CFG] if isinstance(row[ComparisonCols.CFG], ThresholdConfig) else ThresholdConfig()
         ),
         axis = 1
     )
 
-    result = result.drop(columns=[ComparisonCols.CFG])
+    result = result.drop(columns = [ComparisonCols.CFG])
     result[ComparisonCols.METRIC] = pd.Categorical(
         result[ComparisonCols.METRIC], 
         categories = csv_metric_order, 
