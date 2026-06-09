@@ -1,5 +1,6 @@
 import datetime
 from pathlib import Path
+import sys
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -14,8 +15,8 @@ from plot_config import PlotGroupConfig
 
 REPORT_DIR = Path.cwd() / "visual"
 
-BASELINE_COLOR   = "#5B8DB8"
-CONTENDER_COLOR  = "#E8614B"
+BASELINE_COLOR   = "#A0AEC0"
+CONTENDER_COLOR  = "#3182CE"
 CONTENDER_MARKER = "*"
 BASELINE_MARKER  = "o"
  
@@ -60,52 +61,77 @@ def visualize_table(df: pd.DataFrame, report_path: Path) -> None:
         return
  
     html_rows = ""
-    for r in rows:
+    for row in rows:
         status_color = {
-            "regression":  "#ffd6d6",
-            "improvement": "#d6ffd6",
-            "noise":       "#fffbe6",
-            "interesting": "#e6f0ff",
-        }.get(r["status"], "#ffffff")
+            "regression":    "#ffd6d6",
+            "improvement":   "#d6ffd6",
+            "noise":         "#fffbe6",
+            "interesting":   "#e6f0ff",
+        }.get(row["status"], "#ffffff")
  
         html_rows += (
             f"<tr style='background:{status_color}'>"
-            f"<td>{r['metric']}</td>"
-            f"<td>{r['baseline_id'][:8]}</td>"
-            f"<td>{r['baseline_ts']}</td>"
-            f"<td>{r['baseline_val']:.4g}</td>"
-            f"<td>{r['contender_val']:.4g}</td>"
-            f"<td>{r['delta_pct']:+.2f}%</td>"
-            f"<td>{r['status']}</td>"
+            f"<td>{row['metric']}</td>"
+            f"<td>{row['baseline_id'][:8]}</td>"
+            f"<td>{row['baseline_ts']}</td>"
+            f"<td>{row['baseline_val']:.4g}</td>"
+            f"<td>{row['contender_val']:.4g}</td>"
+            f"<td>{row['delta_pct']:+.2f}%</td>"
+            f"<td>{row['status']}</td>"
             "</tr>\n"
         )
  
     html = f"""
     <!DOCTYPE html>
     <html>
-    <head><meta charset='utf-8'>
+    <head>
+        <meta charset='utf-8'>
         <style>
             body{{font-family:sans-serif;font-size:13px}}
             table{{border-collapse:collapse;width:100%}}
             th,td{{border:1px solid #ccc;padding:6px 10px;text-align:left}}
-            th{{background:#2d3e50;color:#fff}}
+            th{{background:#2d3e50;color:#fff;cursor:pointer}}
             tr:hover{{filter:brightness(0.95)}}
         </style>
+        <script>
+        function sortTable(n) {{
+          var table=document.getElementById("diffTable"),rows,i,x,y,dir="asc",switching=true,shouldSwitch;
+          while(switching) {{
+            switching=false;rows=table.rows;
+            for(i=1;i<rows.length-1;i++) {{
+              shouldSwitch=false;x=rows[i].getElementsByTagName("TD")[n];
+              y=rows[i+1].getElementsByTagName("TD")[n];
+              if(dir=="asc" && x.innerHTML.toLowerCase()>y.innerHTML.toLowerCase()){{
+                shouldSwitch=true;break;
+              }}
+              if(dir=="desc" && x.innerHTML.toLowerCase()<y.innerHTML.toLowerCase()){{
+                shouldSwitch=true;break;
+              }}
+            }}
+            if(shouldSwitch){{
+              rows[i].parentNode.insertBefore(rows[i+1],rows[i]);
+              switching=true;
+            }} else {{
+              if(dir=="asc") dir="desc"; else break;
+            }}
+          }}
+        }}
+        </script>
     </head>
     <body>
         <h2>Metric comparison table</h2>
         <p>Contender run: <strong>{get_contender_id(df)[:8]}</strong> &nbsp;|&nbsp;
         Baselines: {len(get_unique_baselines(df))}</p>
-        <table>
+        <table id="diffTable">
             <thead>
                 <tr>
-                    <th>Metric</th>
-                    <th>Baseline ID</th>
-                    <th>Baseline timestamp</th>
-                    <th>Baseline value</th>
-                    <th>Contender value</th>
-                    <th>Delta %</th>
-                    <th>Status</th>
+                    <th onclick="sortTable(0)">Metric</th>
+                    <th onclick="sortTable(1)">Baseline ID</th>
+                    <th onclick="sortTable(2)">Baseline timestamp</th>
+                    <th onclick="sortTable(3)">Baseline value</th>
+                    <th onclick="sortTable(4)">Contender value</th>
+                    <th onclick="sortTable(5)">Delta %</th>
+                    <th onclick="sortTable(6)">Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -117,86 +143,111 @@ def visualize_table(df: pd.DataFrame, report_path: Path) -> None:
     """
  
     report_path.write_text(html, encoding = "utf-8")
-    print(f"Table saved => {report_path}")
- 
+    print(f"Table saved: {report_path}")
  
 def visualize_chart(df: pd.DataFrame, report_path: Path) -> None:
-    metrics         = df[ComparisonCols.METRIC].unique()
-    contender_id    = get_contender_id(df)
-    baseline_ids    = get_unique_baselines(df)
-    n_metrics       = len(metrics)
- 
-    fig, axes = plt.subplots(
-        n_metrics, 1,
-        figsize=(max(10, 2 * len(baseline_ids) + 4), 4 * n_metrics),
-        squeeze=False,
-    )
-    fig.suptitle("Metric values — baselines vs contender", fontsize = 14, fontweight = "bold")
- 
-    for ax, metric in zip(axes[:, 0], metrics):
+    metrics      = df[ComparisonCols.METRIC].unique()
+    contender_id = get_contender_id(df)
+    baseline_ids = get_unique_baselines(df)
+    n_metrics    = len(metrics)
+
+    if n_metrics == 0:
+        return
+
+    n_baselines  = len(baseline_ids)
+    group_width  = 0.8
+    bar_width    = group_width / (n_metrics + 1)
+
+    fig, ax      = plt.subplots(figsize = (max(10, 2 * n_baselines + 4), 5))
+    x            = np.arange(n_baselines + 1)
+    xtick_labels = [f"{bid[:8]}" for bid in baseline_ids] + [f"{contender_id[:8]} (Contender)"]
+    
+    cmap          = plt.cm.get_cmap("tab10")
+    METRIC_COLORS = {metric: cmap(i) for i, metric in enumerate(metrics)}
+
+    for i, metric in enumerate(metrics):
         mdf = df[df[ComparisonCols.METRIC] == metric]
- 
-        labels, values, colors = [], [], []
-        for bid in baseline_ids:
-            row = mdf[mdf[ComparisonCols.BASELINE_RUN_ID] == bid]
-            if row.empty:
-                continue
-            labels.append(f"baseline\n{bid[:8]}")
-            values.append(row.iloc[0][ComparisonCols.BASELINE_VAL])
-            colors.append(BASELINE_COLOR)
- 
-        first = mdf.iloc[0]
-        labels.append(f"CONTENDER\n{contender_id[:8]}")
-        values.append(first[ComparisonCols.CONTENDER_VAL])
-        colors.append(CONTENDER_COLOR)
- 
-        x    = np.arange(len(labels))
-        bars = ax.bar(x, values, color = colors, edgecolor = "white", linewidth = 0.6)
-        ax.set_xticks(x)
-        ax.set_xticklabels(labels, fontsize = 9)
-        ax.set_title(metric, fontsize = 11, fontweight = "bold")
-        ax.set_ylabel("value")
-        ax.yaxis.grid(True, linestyle = "--", alpha = 0.5)
-        ax.set_axisbelow(True)
- 
-        # Value labels on bars
-        for bar, val in zip(bars, values):
-            ax.text(
-                bar.get_x() + bar.get_width() / 2,
-                bar.get_height() * 1.01,
-                f"{val:.3g}",
-                ha       = "center", 
-                va       = "bottom", 
-                fontsize = 8,
-            )
- 
-    add_legend(fig)
-    fig.tight_layout(rect = (0, 0, 1, 0.97))
+
+        baseline_vals = [
+            mdf[mdf[ComparisonCols.BASELINE_RUN_ID] == bid][ComparisonCols.BASELINE_VAL].iloc[0]
+            if not mdf[mdf[ComparisonCols.BASELINE_RUN_ID] == bid].empty else np.nan
+            for bid in baseline_ids
+        ]
+
+        contender_val = mdf[ComparisonCols.CONTENDER_VAL].dropna().iloc[0] if not mdf.empty else np.nan
+        all_vals      = baseline_vals + [contender_val]
+        metric_color  = METRIC_COLORS[metric]
+        
+        offset = (i - n_metrics / 2) * bar_width + bar_width / 2
+        
+        ax.bar(
+            x[:n_baselines] + offset, 
+            baseline_vals, 
+            width     = bar_width, 
+            color     = metric_color, 
+            alpha     = 0.6, 
+            edgecolor = "white"
+        )
+        
+        ax.bar(
+            x[n_baselines:] + offset, 
+            [contender_val], 
+            width     = bar_width, 
+            color     = metric_color, 
+            alpha     = 1.0, 
+            edgecolor = "black", 
+            linewidth = 1.5, 
+            label     = metric
+        )
+
+        for bar, val in zip(x + offset, all_vals):
+            if pd.notna(val):
+                ax.text(bar, val * 1.01, f"{val:.3g}", ha = "center", va = "bottom", fontsize = 8)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(xtick_labels, fontsize = 9)
+    ax.set_ylabel("Value")
+    
+    ax.legend(
+        title                = "Time-series chart: Baseline History vs Contender\n", 
+        loc                  = "lower center",         
+        bbox_to_anchor       = (0.5, 1.02),            
+        ncol                 = min(5, n_metrics),      
+        fontsize             = 9,
+        title_fontproperties = {"weight": "bold", "size": 12},
+        frameon              = True,
+        facecolor            = "white",
+        edgecolor            = "#E2E8F0"
+    )
+    
+    ax.yaxis.grid(True, linestyle = "--", alpha = 0.5)
+    ax.set_axisbelow(True)
+
+    fig.tight_layout(rect = (0, 0, 1, 0.88))
+    
     save_as_html(fig, report_path)
-    print(f"Chart saved => {report_path}")
- 
+    print(f"Chart saved: {report_path}")
  
 def visualize_graph(df: pd.DataFrame, report_path: Path) -> None:
     metrics      = df[ComparisonCols.METRIC].unique()
     n_metrics    = len(metrics)
     contender_id = get_contender_id(df)
+
+    if n_metrics == 0:
+        return
  
-    fig, axes = plt.subplots(
-        n_metrics, 1,
-        figsize = (max(10, 3 * n_runs(df)), 4 * n_metrics),
-        squeeze = False,
-    )
-    fig.suptitle(
-        "Time-series: baseline history => contender",
-        fontsize = 14, fontweight = "bold",
-    )
+    fig, ax = plt.subplots(figsize = (max(10, 3 * n_runs(df)), 6))
+    
+    cmap          = plt.cm.get_cmap("tab10")
+    METRIC_COLORS = {metric: cmap(i) for i, metric in enumerate(metrics)}
+
+    global_xs = global_timestamps = ctdr_idx = None
  
-    for ax, metric in zip(axes[:, 0], metrics):
-        mdf = df[df[ComparisonCols.METRIC] == metric].copy()
- 
+    for metric in metrics:
+        mdf      = df[df[ComparisonCols.METRIC] == metric].copy()
         timeline = build_ordered_timeline(mdf, contender_id)
+
         if not timeline:
-            ax.set_visible(False)
             continue
  
         xs         = list(range(len(timeline)))
@@ -204,42 +255,47 @@ def visualize_graph(df: pd.DataFrame, report_path: Path) -> None:
         is_ctdr    = [t["is_contender"] for t in timeline]
         run_ids    = [t["run_id"]       for t in timeline]
         timestamps = [t["ts_str"]       for t in timeline]
+        
+        if global_xs is None:
+            global_xs         = xs
+            global_timestamps = timestamps
+            ctdr_idx          = next(idx for idx, t in enumerate(timeline) if t["is_contender"])
  
-        ax.plot(xs, ys, color = "#888", linewidth = 1.2, zorder = 2)
+        metric_color          = METRIC_COLORS[metric]
+        ax.plot(xs, ys, color = metric_color, linewidth = 1.5, alpha = 0.7, zorder = 2, label = metric)
  
-        for x, y, contender, rid, ts in zip(xs, ys, is_ctdr, run_ids, timestamps):
+        for x, y, contender, _ in zip(xs, ys, is_ctdr, run_ids):
             if contender:
                 ax.scatter(
                     x, y,
                     s          = 220, 
                     marker     = CONTENDER_MARKER,
-                    color      = CONTENDER_COLOR, 
-                    edgecolors = "white", 
-                    linewidths = 0.8,
+                    color      = metric_color,          
+                    edgecolors = "black",               
+                    linewidths = 1.5,
                     zorder     = CONTENDER_ZORDER,
                 )
                 ax.annotate(
-                    f"CONTENDER\n{rid[:8]}\n{y:.3g}",
+                    f"CONTENDER\n{y:.3g}",
                     xy         = (x, y), 
                     xytext     = (6, 8), 
                     textcoords = "offset points",
                     fontsize   = 7.5, 
-                    color      = CONTENDER_COLOR, 
+                    color      = metric_color, 
                     fontweight = "bold",
                 )
-
             else:
                 ax.scatter(
                     x, y,
                     s          = 70, 
                     marker     = BASELINE_MARKER,
-                    color      = BASELINE_COLOR, 
+                    color      = metric_color, 
                     edgecolors = "white", 
                     linewidths = 0.6,
                     zorder     = BASELINE_ZORDER,
                 )
                 ax.annotate(
-                    f"{rid[:8]}\n{y:.3g}",
+                    f"{y:.3g}",
                     xy         = (x, y), 
                     xytext     = (4, 6), 
                     textcoords = "offset points",
@@ -247,22 +303,37 @@ def visualize_graph(df: pd.DataFrame, report_path: Path) -> None:
                     color      = "#3a3a3a",
                 )
 
-        ctdr_idx = next(i for i, t in enumerate(timeline) if t["is_contender"])
-        ax.axvspan(ctdr_idx - 0.4, ctdr_idx + 0.4, color = CONTENDER_COLOR, alpha = 0.07, zorder = 1)
+    if global_xs is not None and global_timestamps is not None and ctdr_idx is not None:
+        ax.axvspan(ctdr_idx - 0.4, ctdr_idx + 0.4, color = "#A0AEC0", alpha = 0.08, zorder = 1)
         ax.axvline(ctdr_idx - 0.5, color = "#ccc", linewidth = 0.8, linestyle = "--", zorder = 1)
  
-        ax.set_xticks(xs)
-        ax.set_xticklabels(timestamps, fontsize = 8, rotation = 20, ha = "right")
-        ax.set_title(metric, fontsize = 11, fontweight = "bold")
-        ax.set_ylabel("value")
-        ax.yaxis.grid(True, linestyle = "--", alpha = 0.4)
-        ax.set_axisbelow(True)
-        ax.set_xlim(-0.6, len(xs) - 0.4)
- 
-    add_legend(fig)
-    fig.tight_layout(rect = (0, 0, 1, 0.97))
+        ax.set_xticks(global_xs)
+        ax.set_xticklabels([str(ts) for ts in global_timestamps], fontsize = 8, rotation = 20, ha = "right")
+        ax.set_xlim(-0.6, len(global_xs) - 0.4)
+    else:
+        print("Warning: No valid timeline data found to build graph axis layout.", file = sys.stderr)
+        return
+
+    ax.set_ylabel("Value")
+    ax.yaxis.grid(True, linestyle = "--", alpha = 0.4)
+    ax.set_axisbelow(True)
+
+    ax.legend(
+        title                = "Time-series graph: Baseline History vs Contender\n", 
+        loc                  = "lower center",         
+        bbox_to_anchor       = (0.5, 1.02),            
+        ncol                 = min(5, n_metrics),      
+        fontsize             = 9,
+        title_fontproperties = {"weight": "bold", "size": 12},
+        frameon              = True,
+        facecolor            = "white",
+        edgecolor            = "#E2E8F0"
+    )
+
+    fig.tight_layout(rect = (0, 0, 1, 0.93))
+    
     save_as_html(fig, report_path)
-    print(f"Graph saved => {report_path}")
+    print(f"Graph saved: {report_path}")
 
 def build_ordered_timeline(mdf: pd.DataFrame, contender_id: str) -> list[dict]:
     records        = []
@@ -298,11 +369,9 @@ def build_ordered_timeline(mdf: pd.DataFrame, contender_id: str) -> list[dict]:
     })
  
     return records
- 
- 
+
 def build_timeline_records(df: pd.DataFrame) -> list[dict]:
     records      = []
-    contender_id = get_contender_id(df)
     for _, row in df.iterrows():
         records.append({
             "metric":        row[ComparisonCols.METRIC],
@@ -314,23 +383,19 @@ def build_timeline_records(df: pd.DataFrame) -> list[dict]:
             "status":        row.get(ComparisonCols.STATUS, ""),
         })
     return records
- 
- 
+
 def get_contender_id(df: pd.DataFrame) -> str:
     col = ComparisonCols.CONTENDER_RUN_ID
     if col in df.columns:
         return str(df[col].iloc[0])
     return "contender"
- 
- 
+
 def get_unique_baselines(df: pd.DataFrame) -> list[str]:
     return list(df[ComparisonCols.BASELINE_RUN_ID].unique())
- 
- 
+
 def n_runs(df: pd.DataFrame) -> int:
     return len(get_unique_baselines(df)) + 1
- 
- 
+
 def add_legend(fig: Figure) -> None:
     baseline_patch  = mpatches.Patch(color = BASELINE_COLOR,  label = "Baseline runs")
     contender_patch = mpatches.Patch(color = CONTENDER_COLOR, label = "Contender run")
@@ -340,8 +405,7 @@ def add_legend(fig: Figure) -> None:
         fontsize   = 10, 
         framealpha = 0.9,
     )
- 
- 
+
 def save_as_html(fig: Figure, path: Path) -> None:
     import io
 
@@ -362,7 +426,8 @@ def save_as_html(fig: Figure, path: Path) -> None:
     </head>
     <body>
         {svg_content}
-    </body></html>
+    </body>
+    </html>
     """
 
     path.write_text(html, encoding = "utf-8")
