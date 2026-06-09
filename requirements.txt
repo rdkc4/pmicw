@@ -6,12 +6,12 @@ fonttools==4.63.0
 gitdb==4.0.12
 GitPython==3.1.50
 kiwisolver==1.5.0
-matplotlib==3.10.9
 narwhals==2.22.1
 numpy==2.4.6
 packaging==26.2
 pandas==3.0.3
 pillow==12.2.0
+plotly==6.8.0
 psutil==7.2.2
 py-cpuinfo==9.0.0
 pyparsing==3.3.2
