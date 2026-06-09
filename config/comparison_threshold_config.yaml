@@ -1,4 +1,4 @@
-# THreshold semantics:
+# Threshold semantics:
 # - direction                 : lower_better, higher_better, neutral
 #                               lower_better  => lower values mean improvement
 #                               higher_better => higher values mean improvement

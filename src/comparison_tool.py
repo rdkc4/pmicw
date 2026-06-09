@@ -10,6 +10,8 @@ from cli_parser import parse_comparison_args
 from comparison_config import ThresholdConfig, load_thresholds_config
 from deltas_computer import compute_deltas
 from measurement_query import execute_query, fetch_last_n, fetch_two
+from plot_config import PlotGroupConfig, load_plot_config
+from report_visualizer import visualize_report
 from report_writer import write_report
 
 @dataclass
@@ -61,12 +63,30 @@ def report(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace) -> None:
     elif args.compare_two:
         print(f"Failed to write report for cmp2", file = sys.stderr)
 
+def visualize(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace, cfg: dict[str, PlotGroupConfig]) -> None:
+    if cmp_dfs.cmp_df is not None and not cmp_dfs.cmp_df.empty:
+        visualize_report(cmp_dfs.cmp_df, cfg, args.visual_format, f"{args.run_id}_{args.compare}")
+    elif args.compare:
+        print(f"Failed to visualize report for cmp", file = sys.stderr)
+    
+    if cmp_dfs.cmpw_df is not None and not cmp_dfs.cmpw_df.empty:
+        visualize_report(cmp_dfs.cmpw_df, cfg, args.visual_format, f"{args.run_id}_{args.compare_with}")
+    elif args.compare_with:
+        print(f"Failed to visualize report for cmpw", file = sys.stderr)
+
+    if cmp_dfs.cmp2_df is not None and not cmp_dfs.cmp2_df.empty:
+        visualize_report(cmp_dfs.cmp2_df, cfg, args.visual_format, f"{args.cmp[1]}_{args.cmp[0]}")
+    elif args.compare_two:
+        print(f"Failed to visualize report for cmp2", file = sys.stderr)
+
 def main() -> None:
-    args    = parse_comparison_args()
-    cfg     = load_thresholds_config("config/comparison_threshold_config.yaml")
-    cmp_dfs = compare(args, cfg)
+    args          = parse_comparison_args()
+    threshold_cfg = load_thresholds_config("config/comparison_threshold_config.yaml")
+    plot_cfg      = load_plot_config("config/plot_config.yaml")
+    cmp_dfs       = compare(args, threshold_cfg)
 
     report(cmp_dfs, args)
+    visualize(cmp_dfs, args, plot_cfg)
 
 if __name__ == "__main__":
     main()

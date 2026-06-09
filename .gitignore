@@ -3,6 +3,7 @@ data/
 
 # Directory for reports
 reports/
+visual/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
