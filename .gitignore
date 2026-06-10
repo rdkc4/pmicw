@@ -1,11 +1,6 @@
-web/
-
-# Directory for csv results
-data/
-
 # Directory for reports
-reports/
-visual/
+web/reports/
+web/visual/
 
 # Actions
 actions-runner/

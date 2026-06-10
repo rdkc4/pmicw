@@ -13,7 +13,7 @@ from comparison_context import (
     ComparisonReportGroups, 
     ComparisonVisualGroups
 )
-from paths import INDEX_HTML, VISUAL_DIR
+from paths import INDEX_HTML, WEB_DIR
 
 ICON_MAP = {
     "csv": (
@@ -41,7 +41,7 @@ def generate_dashboard(
     report_groups: ComparisonReportGroups,
     visual_groups: ComparisonVisualGroups,
 ) -> None:
-    VISUAL_DIR.mkdir(parents = True, exist_ok = True)
+    WEB_DIR.mkdir(parents = True, exist_ok = True)
 
     cmp_sections = [
         ("cmp",  report_groups.cmp,  visual_groups.cmp),
