@@ -21,7 +21,7 @@ python3 -c "import venv" 2>/dev/null || missing+=("python3-venv")
 
 apt_packages=()
 
-for cmd in "${mssing[@]}"; do
+for cmd in "${missing[@]}"; do
     case "$cmd" in
         python3)      apt_packages+=("python3" "python3-pip" "python3-venv") ;;
         pip3)         apt_packages+=("python3-pip") ;;
