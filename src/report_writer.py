@@ -4,8 +4,7 @@ import pandas as pd
 
 from cli_parser import ReportFormatOptions
 from comparison_context import ComparisonCols, ComparisonReports, MetricStatus
-
-REPORT_DIR = Path.cwd() / "reports"
+from paths import REPORT_DIR
 
 MD_REPORT_ROW_COLORS = {
     MetricStatus.REGRESSION:  "background-color: rgba(255, 77, 77, 0.15); border-left: 5px solid #ff4d4d;",

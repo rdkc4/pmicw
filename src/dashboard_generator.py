@@ -6,14 +6,14 @@ import plotly.graph_objects as go
 from comparison_context import (
     BORDER_COLOR, 
     CONTENDER_ZONE, 
-    DARK_BG, 
-    INDEX_HTML, 
+    DARK_BG,
     PANEL_BG,
     TEXT_MAIN, 
     TEXT_MUTED,
     ComparisonReportGroups, 
     ComparisonVisualGroups
 )
+from paths import INDEX_HTML, VISUAL_DIR
 
 ICON_MAP = {
     "csv": (
@@ -41,6 +41,8 @@ def generate_dashboard(
     report_groups: ComparisonReportGroups,
     visual_groups: ComparisonVisualGroups,
 ) -> None:
+    VISUAL_DIR.mkdir(parents = True, exist_ok = True)
+
     cmp_sections = [
         ("cmp",  report_groups.cmp,  visual_groups.cmp),
         ("cmp2", report_groups.cmp2, visual_groups.cmp2),

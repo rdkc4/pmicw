@@ -5,9 +5,6 @@ import plotly.graph_objects as go
 
 import pandas as pd
 
-REPORT_DIR = Path.cwd() / "visual"
-INDEX_HTML = REPORT_DIR / "index.html"
-
 DARK_BG        = "#0f172a"
 PANEL_BG       = "#1e293b"
 BORDER_COLOR   = "#334155"

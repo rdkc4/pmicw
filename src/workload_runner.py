@@ -106,9 +106,8 @@ def execute_workload(
 
         if proc.returncode != 0:
             ctx.monitors.activity_event.clear()
-            raise RuntimeError(
-                f"Workload '{" ".join(command)}' failed with exit code {proc.returncode}.\n"
-            )
+            print(f"Warning: workload '{" ".join(command)}' failed with exit code {proc.returncode}.\n", file = sys.stderr)
+            continue
 
         ctx.monitors.activity_event.clear()
         ctx.monitors.active_pid[0] = -1
