@@ -5,8 +5,7 @@ import sys
 from typing import Sequence
 
 from measurement import Measurement
-
-DATA_DIR = Path.cwd() / "data"
+from paths import DATA_DIR
 
 def repo_to_filename(repository: str, workload_name: str, header: str) -> str:
     filename = ""

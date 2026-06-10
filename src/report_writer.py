@@ -1,12 +1,10 @@
-import datetime
 from pathlib import Path
 import numpy as np
 import pandas as pd
 
 from cli_parser import ReportFormatOptions
-from comparison_context import ComparisonCols, MetricStatus
-
-REPORT_DIR = Path.cwd() / "reports"
+from comparison_context import ComparisonCols, ComparisonReports, MetricStatus
+from paths import REPORT_DIR
 
 MD_REPORT_ROW_COLORS = {
     MetricStatus.REGRESSION:  "background-color: rgba(255, 77, 77, 0.15); border-left: 5px solid #ff4d4d;",
@@ -17,7 +15,8 @@ MD_REPORT_ROW_COLORS = {
     MetricStatus.IRRELEVANT:  "background-color: transparent; color: #555555;"
 }
 
-def write_report(df: pd.DataFrame, report_formats: list[ReportFormatOptions], report_path: str) -> None:
+def write_report(df: pd.DataFrame, report_formats: list[ReportFormatOptions]) -> ComparisonReports:
+    reports     = ComparisonReports()
     report_data = {ComparisonCols.COMPARISON: []}
     grouped     = df.groupby(["baseline_run_id", "contender_run_id"], sort = False)
 
@@ -39,13 +38,21 @@ def write_report(df: pd.DataFrame, report_formats: list[ReportFormatOptions], re
     REPORT_DIR.mkdir(parents = True, exist_ok = True)
 
     if ReportFormatOptions.CSV in report_formats:
-        write_csv_report(df, generate_report_path(report_path, ReportFormatOptions.CSV))
+        path        = generate_report_path("report_csv", ReportFormatOptions.CSV)
+        reports.csv = str(path)
+        write_csv_report(df, path)
 
     if ReportFormatOptions.JSON in report_formats:
-        write_json_report(report_data, generate_report_path(report_path, ReportFormatOptions.JSON))
+        path         = generate_report_path("report_json", ReportFormatOptions.JSON)
+        reports.json = str(path)
+        write_json_report(report_data, path)
 
     if ReportFormatOptions.MD in report_formats:
-        write_md_report(report_data, generate_report_path(report_path, ReportFormatOptions.MD))
+        path       = generate_report_path("report_md", ReportFormatOptions.MD)
+        reports.md = str(path)
+        write_md_report(report_data, path)
+
+    return reports
 
 def write_csv_report(df: pd.DataFrame, output_path: Path) -> None:
     df.to_csv(output_path, index = False)
@@ -118,5 +125,4 @@ def write_md_report(report_data: dict, output_path: Path) -> None:
     output_path.write_text("\n".join(lines), encoding = "utf-8")
 
 def generate_report_path(relative_path, format: str) -> Path:
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return REPORT_DIR / f"{relative_path}_{timestamp}.{format}"
+    return REPORT_DIR / f"{relative_path}.{format}"

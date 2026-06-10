@@ -26,9 +26,7 @@ plot_groups:
 
   startup:
     metrics:
-      - name: cycles
-        suffix: mean
-      - name: linker_cycles
+      - name: wall_time_ms
         suffix: mean
       - name: startup_time_ms
         suffix: mean
