@@ -1,8 +1,19 @@
-from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
+import plotly.graph_objects as go
 
-from metrics_config import ProfilerConfig
+import pandas as pd
+
+REPORT_DIR = Path.cwd() / "visual"
+INDEX_HTML = REPORT_DIR / "index.html"
+
+DARK_BG        = "#0f172a"
+PANEL_BG       = "#1e293b"
+BORDER_COLOR   = "#334155"
+TEXT_MAIN      = "#f8fafc"
+TEXT_MUTED     = "#94a3b8"
+CONTENDER_ZONE = "#38bdf8"
 
 class MetricStatus(StrEnum):
     NOISE       = "noise"
@@ -38,14 +49,32 @@ class ComparisonCols(StrEnum):
     UNIT             = "unit"
     STATUS           = "status"
 
-def build_segment_map(cfg: ProfilerConfig) -> dict[str, set[str]]:
-    segment_map = defaultdict(set)
+@dataclass
+class ComparisonDataFrames:
+    cmp_df:  pd.DataFrame | None = None
+    cmp2_df: pd.DataFrame | None = None
+    cmpw_df: pd.DataFrame | None = None
 
-    for segment in cfg.segments.values():
-        for metric in segment.metrics:
-            segment_map[segment.name].add(metric.name)
-            
-            for structural_field in metric.output_fields():
-                segment_map[segment.name].add(structural_field)
+@dataclass
+class ComparisonReports:
+    csv:  str | None = None
+    md:   str | None = None
+    json: str | None = None
 
-    return dict(segment_map)
+@dataclass
+class ComparisonReportGroups:
+    cmp:  ComparisonReports = field(default_factory = ComparisonReports)
+    cmp2: ComparisonReports = field(default_factory = ComparisonReports)
+    cmpw: ComparisonReports = field(default_factory = ComparisonReports)
+
+@dataclass
+class ComparisonVisuals:
+    table: str       | None = None
+    chart: go.Figure | None = None
+    graph: go.Figure | None = None
+
+@dataclass
+class ComparisonVisualGroups:
+    cmp:  dict[str, ComparisonVisuals] = field(default_factory = dict)
+    cmp2: dict[str, ComparisonVisuals] = field(default_factory = dict)
+    cmpw: dict[str, ComparisonVisuals] = field(default_factory = dict)

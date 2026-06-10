@@ -1,5 +1,3 @@
-from pathlib import Path
-import re
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -7,26 +5,14 @@ import plotly.express as px
 from html import escape
 
 from cli_parser import VisualFormatOptions
-from comparison_context import ComparisonCols
+from comparison_context import BORDER_COLOR, CONTENDER_ZONE, DARK_BG, PANEL_BG, TEXT_MAIN, TEXT_MUTED, ComparisonCols, ComparisonVisuals
 from plot_config import PlotGroupConfig
-
-REPORT_DIR = Path.cwd() / "visual"
-INDEX_HTML = REPORT_DIR / "index.html"
-
-DARK_BG        = "#0f172a"
-PANEL_BG       = "#1e293b"
-BORDER_COLOR   = "#334155"
-TEXT_MAIN      = "#f8fafc"
-TEXT_MUTED     = "#94a3b8"
-CONTENDER_ZONE = "#38bdf8"
 
 def visualize_report(
     df:             pd.DataFrame,
     plot_groups:    dict[str, PlotGroupConfig],
     visual_formats: list[VisualFormatOptions]
-) -> None:
-    REPORT_DIR.mkdir(parents = True, exist_ok = True)
-
+) -> dict[str, ComparisonVisuals]:
     tabs_data = {}
     for group_name, group_cfg in plot_groups.items():
         metrics   = group_cfg.get_metric_names()
@@ -42,17 +28,15 @@ def visualize_report(
 
         if visual_df.empty:
             continue
-
-        table_html = visualize_table(visual_df) if VisualFormatOptions.TABLE in visual_formats else None
-        chart_fig  = visualize_chart(visual_df) if VisualFormatOptions.CHART in visual_formats else None
-        graph_fig  = visualize_graph(visual_df) if VisualFormatOptions.GRAPH in visual_formats else None
-
-        if table_html or chart_fig or graph_fig:
-            tabs_data[group_name] = create_group_panel(table_html, chart_fig, graph_fig)
-
-    if tabs_data:
-        build_tabbed_index_html(tabs_data)
-
+        
+        visuals    = ComparisonVisuals(
+            table  = visualize_table(visual_df) if VisualFormatOptions.TABLE in visual_formats else None,
+            chart  = visualize_chart(visual_df) if VisualFormatOptions.CHART in visual_formats else None,
+            graph  = visualize_graph(visual_df) if VisualFormatOptions.GRAPH in visual_formats else None
+        )
+        tabs_data[group_name] = visuals
+    
+    return tabs_data
 
 def visualize_table(df: pd.DataFrame) -> str | None:
     rows = build_timeline_records(df)
@@ -323,170 +307,6 @@ def visualize_graph(df: pd.DataFrame) -> go.Figure | None:
     )
     return fig
 
-
-def create_group_panel(table_html: str | None, chart_fig: go.Figure | None, graph_fig: go.Figure | None) -> str:
-    panel_html = '<div class="dashboard-grid">'
-    if table_html:
-        panel_html += f'<div class="grid-row-full">{table_html}</div>'
-    if chart_fig:
-        chart_raw   = chart_fig.to_html(include_plotlyjs = False, full_html = False, config = {"responsive": True})
-        panel_html += f'<div class="grid-row-full style-card-gap">{chart_raw}</div>'
-    if graph_fig:
-        graph_raw   = graph_fig.to_html(include_plotlyjs = False, full_html = False, config = {"responsive": True})
-        panel_html += f'<div class="grid-row-full style-card-gap">{graph_raw}</div>'
-    panel_html += '</div>'
-    return panel_html
-
-
-def build_tabbed_index_html(tabs_data: dict[str, str]) -> None:
-    tab_buttons  = ""
-    tab_contents = ""
-    
-    for idx, (group_name, grid_html) in enumerate(tabs_data.items()):
-        active_class  = "active" if idx == 0 else ""
-        display_style = "block"  if idx == 0 else "none"
-        
-        tab_id = safe_id(group_name)
-        tab_buttons  += f'<button class="tab-btn {active_class}" data-target="{tab_id}">{escape(str(group_name)).upper()}</button>\n'
-        tab_contents += f'<div id="{tab_id}" class="tab-content" style="display:{display_style};">{grid_html}</div>\n'
-
-    html_payload = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <title>PMICW Dashboard</title>
-        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-        <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: {DARK_BG}; color: {TEXT_MAIN}; margin: 0; padding: 20px; }}
-            .header {{ margin-bottom: 25px; border-bottom: 1px solid {BORDER_COLOR}; padding-bottom: 15px; }}
-            .header h1 {{ margin: 0 0 5px 0; font-size: 24px; letter-spacing: -0.5px; }}
-            .header p {{ margin: 0; color: {TEXT_MUTED}; font-size: 14px; }}
-            
-            .tab-bar {{ display: flex; gap: 8px; border-bottom: 2px solid {BORDER_COLOR}; padding-bottom: 0px; margin-bottom: 20px; }}
-            .tab-btn {{ background: none; border: none; color: {TEXT_MUTED}; padding: 12px 20px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; border-bottom: 3px solid transparent; margin-bottom: -2px; }}
-            .tab-btn:hover {{ color: {TEXT_MAIN}; background-color: rgba(255,255,255,0.03); }}
-            .tab-btn.active {{ color: {CONTENDER_ZONE}; border-bottom-color: {CONTENDER_ZONE}; }}
-            
-            .dashboard-grid {{ display: flex; flex-direction: column; gap: 24px; width: 100%; }}
-            .grid-row-full {{ width: 100%; border-radius: 6px; overflow: hidden; background: {DARK_BG}; }}
-            .style-card-gap {{ border: 1px solid {BORDER_COLOR}; padding: 10px; box-sizing: border-box; margin-bottom: 10px; }}
-            
-            .table-card-wrapper {{ background-color: {DARK_BG}; border-radius: 6px; padding: 10px 10px 0 10px; box-sizing: border-box; }}
-            .table-title-area {{ padding-bottom: 15px; font-family: sans-serif; }}
-            .table-main-title {{ font-size: 14px; font-weight: bold; color: {TEXT_MAIN}; margin-bottom: 4px; }}
-            .table-sub-title {{ font-size: 12px; color: {TEXT_MUTED}; }}
-            .table-scroll-container {{ max-height: 260px; overflow-y: auto; border: 1px solid {BORDER_COLOR}; border-radius: 4px; }}
-            
-            .sortable-dashboard-table {{ width: 100%; border-collapse: collapse; font-size: 12px; font-family: sans-serif; text-align: left; }}
-            .sortable-dashboard-table th {{ 
-                position: sticky; top: 0; background-color: #111827; color: {TEXT_MAIN}; 
-                padding: 8px 10px; font-weight: 600; font-size: 13px; z-index: 10; 
-                border-bottom: 2px solid {BORDER_COLOR}; cursor: pointer; user-select: none;
-            }}
-            .sortable-dashboard-table th:hover {{ background-color: #1f2937; }}
-            .sortable-dashboard-table td {{ padding: 6px 10px; border-bottom: 1px solid {BORDER_COLOR}; background-color: {PANEL_BG}; vertical-align: middle; }}
-            .sort-icon {{ font-size: 10px; color: {TEXT_MUTED}; margin-left: 3px; }}
-            
-            .tab-content {{ animation: fadeIn 0.3s ease; }}
-            @keyframes fadeIn {{ from {{ opacity: 0; }} to {{ opacity: 1; }} }}
-        </style>
-        <script>
-            document.addEventListener("DOMContentLoaded", function() {{
-                
-                const tabBar = document.querySelector(".tab-bar");
-                if (tabBar) {{
-                    tabBar.addEventListener("click", function(e) {{
-                        const targetButton = e.target.closest(".tab-btn");
-                        if (!targetButton) return;
-
-                        const tabName = targetButton.getAttribute("data-target");
-                        const tabContents = document.getElementsByClassName("tab-content");
-                        for (let i = 0; i < tabContents.length; i++) {{
-                            tabContents[i].style.display = "none";
-                        }}
-
-                        const tabButtons = document.getElementsByClassName("tab-btn");
-                        for (let i = 0; i < tabButtons.length; i++) {{
-                            tabButtons[i].classList.remove("active");
-                        }}
-
-                        const currentActiveTab = document.getElementById(tabName);
-                        if (currentActiveTab) {{
-                            currentActiveTab.style.display = "block";
-                            targetButton.classList.add("active");
-
-                            const plots = currentActiveTab.getElementsByClassName("js-plotly-plot");
-                            for (let i = 0; i < plots.length; i++) {{
-                                Plotly.Plots.resize(plots[i]);
-                            }}
-                        }}
-                    }});
-                }}
-
-                document.body.addEventListener("click", function(e) {{
-                    const headerCell = e.target.closest(".sortable-dashboard-table th");
-                    if (!headerCell) return;
-
-                    const colIndex = parseInt(headerCell.getAttribute("data-col"), 10);
-                    const table = headerCell.closest("table");
-                    const targetBody = table.querySelector("tbody");
-                    const rowsArray = Array.from(targetBody.querySelectorAll("tr"));
-                    const sortingAscending = headerCell.getAttribute("data-order") !== "asc";
-                    
-                    rowsArray.sort(function(rowA, rowB) {{
-                        const cellTextA = rowA.children[colIndex].innerText.trim();
-                        const cellTextB = rowB.children[colIndex].innerText.trim();
-                        
-                        const parseDateA = Date.parse(cellTextA);
-                        const parseDateB = Date.parse(cellTextB);
-                        if (!isNaN(parseDateA) && !isNaN(parseDateB) && isNaN(Number(cellTextA))) {{
-                            return sortingAscending ? parseDateA - parseDateB : parseDateB - parseDateA;
-                        }}
-                        const floatValA = parseFloat(cellTextA.replace(/[^\\d.-]/g, ''));
-                        const floatValB = parseFloat(cellTextB.replace(/[^\\d.-]/g, ''));
-                        if (!isNaN(floatValA) && !isNaN(floatValB)) {{
-                            return sortingAscending ? floatValA - floatValB : floatValB - floatValA;
-                        }}
-
-                        return sortingAscending ? cellTextA.localeCompare(cellTextB) : cellTextB.localeCompare(cellTextA);
-                    }});
-                    
-                    headerCell.closest("thead").querySelectorAll("th").forEach(function(th) {{ th.removeAttribute("data-order"); }});
-                    headerCell.setAttribute("data-order", sortingAscending ? "asc" : "desc");
-                    
-                    targetBody.innerHTML = '';
-                    rowsArray.forEach(function(row) {{ targetBody.appendChild(row); }});
-                }});
-
-                window.addEventListener("resize", function() {{
-                    const elements = document.getElementsByClassName("js-plotly-plot");
-                    for (let i = 0; i < elements.length; i++) {{
-                        Plotly.Plots.resize(elements[i]);
-                    }}
-                }});
-            }});
-        </script>
-    </head>
-    <body>
-
-        <div class="header">
-            <h1>PMICW Dashboard</h1>
-            <p>Automated CI Evaluation Results Timeline &bull; Static Dashboard Archive Site</p>
-        </div>
-
-        <div class="tab-bar">
-            {tab_buttons}
-        </div>
-
-        {tab_contents}
-
-    </body>
-    </html>
-    """
-    INDEX_HTML.write_text(html_payload, encoding = "utf-8")
-    print(f"Dashboard index.html saved to: {INDEX_HTML}")
-
 def build_ordered_timeline(mdf: pd.DataFrame, contender_id: str) -> list[dict]:
     records        = []
     seen_baselines = set()
@@ -512,7 +332,7 @@ def build_ordered_timeline(mdf: pd.DataFrame, contender_id: str) -> list[dict]:
     if not mdf.empty:
         first = mdf.iloc[0]
 
-        ctdr_ts_raw = "Current Run"
+        ctdr_ts_raw = "Contender Run"
         ctdr_ts_obj = pd.to_datetime(ctdr_ts_raw, errors = "coerce")
         
         records.append({
@@ -539,14 +359,3 @@ def get_contender_id(df: pd.DataFrame) -> str:
 
 def get_unique_baselines(df: pd.DataFrame) -> list[str]:
     return list(df[ComparisonCols.BASELINE_RUN_ID].unique())
-
-def safe_id(value) -> str:
-    value = str(value)
-    value = value.strip().lower()
-    value = re.sub(r'[^a-z0-9_-]+', '-', value)
-    value = re.sub(r'-{2,}', '-', value).strip('-')
-
-    if not value or not value[0].isalpha():
-        value = f"tab-{value}"
-
-    return value

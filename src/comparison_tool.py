@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
 
 import argparse
-from dataclasses import dataclass
 import sys
-
 import pandas as pd
 
 from cli_parser import parse_comparison_args
 from comparison_config import ThresholdConfig, load_thresholds_config
+from comparison_context import ComparisonDataFrames, ComparisonReportGroups, ComparisonVisualGroups
+from dashboard_generator import generate_dashboard
 from deltas_computer import compute_deltas
 from measurement_query import execute_query, fetch_last_n, fetch_two
 from plot_config import PlotGroupConfig, load_plot_config
 from report_visualizer import visualize_report
 from report_writer import write_report
-
-@dataclass
-class ComparisonDataFrames:
-    cmp_df:  pd.DataFrame | None = None
-    cmp2_df: pd.DataFrame | None = None
-    cmpw_df: pd.DataFrame | None = None
 
 def compare_n(n: int, contender_id: str, path: str, threshold_cfg: dict[str, ThresholdConfig]) -> pd.DataFrame:
     comparison_data = execute_query(fetch_last_n(n, contender_id, path))
@@ -47,37 +41,45 @@ def compare(args: argparse.Namespace, threshold_cfg: dict[str, ThresholdConfig])
 
     return cmp_dfs
 
-def report(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace) -> None:
+def report(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace) -> ComparisonReportGroups:
+    report_groups = ComparisonReportGroups()
+
     if cmp_dfs.cmp_df is not None and not cmp_dfs.cmp_df.empty:
-        write_report(cmp_dfs.cmp_df, args.report_format, f"{args.run_id}_{args.compare}")
+        report_groups.cmp = write_report(cmp_dfs.cmp_df, args.report_format)
     elif args.compare:
         print(f"Failed to write report for cmp", file = sys.stderr)
 
     if cmp_dfs.cmpw_df is not None and not cmp_dfs.cmpw_df.empty:
-        write_report(cmp_dfs.cmpw_df, args.report_format, f"{args.run_id}_{args.compare_with}")
+        report_groups.cmpw = write_report(cmp_dfs.cmpw_df, args.report_format)
     elif args.compare_with:
         print(f"Failed to write report for cmpw", file = sys.stderr)
 
     if cmp_dfs.cmp2_df is not None and not cmp_dfs.cmp2_df.empty:
-        write_report(cmp_dfs.cmp2_df, args.report_format, f"{args.cmp[1]}_{args.cmp[0]}")
+        report_groups.cmp2 = write_report(cmp_dfs.cmp2_df, args.report_format)
     elif args.compare_two:
         print(f"Failed to write report for cmp2", file = sys.stderr)
 
-def visualize(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace, cfg: dict[str, PlotGroupConfig]) -> None:
+    return report_groups
+
+def visualize(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace, cfg: dict[str, PlotGroupConfig]) -> ComparisonVisualGroups:
+    visual_groups = ComparisonVisualGroups()
+
     if cmp_dfs.cmp_df is not None and not cmp_dfs.cmp_df.empty:
-        visualize_report(cmp_dfs.cmp_df, cfg, args.visual_format)
+        visual_groups.cmp = visualize_report(cmp_dfs.cmp_df, cfg, args.visual_format)
     elif args.compare:
         print(f"Failed to visualize report for cmp", file = sys.stderr)
     
     if cmp_dfs.cmpw_df is not None and not cmp_dfs.cmpw_df.empty:
-        visualize_report(cmp_dfs.cmpw_df, cfg, args.visual_format)
+        visual_groups.cmpw = visualize_report(cmp_dfs.cmpw_df, cfg, args.visual_format)
     elif args.compare_with:
         print(f"Failed to visualize report for cmpw", file = sys.stderr)
 
     if cmp_dfs.cmp2_df is not None and not cmp_dfs.cmp2_df.empty:
-        visualize_report(cmp_dfs.cmp2_df, cfg, args.visual_format)
+        visual_groups.cmp2 = visualize_report(cmp_dfs.cmp2_df, cfg, args.visual_format)
     elif args.compare_two:
         print(f"Failed to visualize report for cmp2", file = sys.stderr)
+
+    return visual_groups
 
 def main() -> None:
     args          = parse_comparison_args()
@@ -85,8 +87,9 @@ def main() -> None:
     plot_cfg      = load_plot_config("config/plot_config.yaml")
     cmp_dfs       = compare(args, threshold_cfg)
 
-    report(cmp_dfs, args)
-    visualize(cmp_dfs, args, plot_cfg)
+    report_groups = report(cmp_dfs, args)
+    visual_groups = visualize(cmp_dfs, args, plot_cfg)
+    generate_dashboard(report_groups, visual_groups)
 
 if __name__ == "__main__":
     main()
