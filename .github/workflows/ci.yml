@@ -2,15 +2,11 @@ name: Benchmark Pipeline
 
 on:
   push:
-    branches:
-      - main
     paths-ignore:
       - 'web/data/**'
       - 'web/reports/**'
       - 'web/visual/**'
   pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read
