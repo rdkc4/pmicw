@@ -1,0 +1,63 @@
+name: Benchmark Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'web/data/**'
+      - 'web/reports/**'
+      - 'web/visual/**'
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  benchmark:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        run: |
+          ./setup.sh
+
+      - name: Run workload benchmark
+        run: |
+          export PATH="$GITHUB_WORKSPACE/.venv/bin:$PATH"
+
+          ./run.sh \
+            -m cpu,memory,thread,gpu \
+            -it 5 -wit 3 \
+            -cmp 10 \
+            -rfmt json,md,csv \
+            -vfmt table,chart,graph \
+            ./workloads/test.py
+
+      - name: Verify Pages Content
+        run: |
+          ls -R web
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: benchmark
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4

@@ -29,4 +29,3 @@ plot_groups:
       - name: wall_time_ms
         suffix: mean
       - name: startup_time_ms
-        suffix: mean
