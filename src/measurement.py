@@ -77,10 +77,24 @@ class Version:
     def __init__(self):
         try:
             repo = git.Repo(search_parent_directories=True)
-            self.repository = repo.remotes.origin.url
-            self.branch     = repo.active_branch.name
-            self.commit     = repo.head.commit.hexsha
-        except:
+            
+            try:
+                self.repository = repo.remotes.origin.url
+            except Exception:
+                self.repository = "N/A"
+
+            try:
+                branch = repo.active_branch.name
+            except TypeError:
+                branch = repo.git.rev_parse('--abbrev-ref', 'HEAD')
+                if branch == "HEAD":
+                    branch = "DETACHED_HEAD"
+            self.branch = branch
+
+            # Commit hash
+            self.commit = repo.head.commit.hexsha
+
+        except Exception:
             self.repository = "N/A"
             self.branch     = "N/A"
             self.commit     = "N/A"
