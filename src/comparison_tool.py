@@ -65,17 +65,17 @@ def report(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace) -> None:
 
 def visualize(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace, cfg: dict[str, PlotGroupConfig]) -> None:
     if cmp_dfs.cmp_df is not None and not cmp_dfs.cmp_df.empty:
-        visualize_report(cmp_dfs.cmp_df, cfg, args.visual_format, f"{args.run_id}_{args.compare}")
+        visualize_report(cmp_dfs.cmp_df, cfg, args.visual_format)
     elif args.compare:
         print(f"Failed to visualize report for cmp", file = sys.stderr)
     
     if cmp_dfs.cmpw_df is not None and not cmp_dfs.cmpw_df.empty:
-        visualize_report(cmp_dfs.cmpw_df, cfg, args.visual_format, f"{args.run_id}_{args.compare_with}")
+        visualize_report(cmp_dfs.cmpw_df, cfg, args.visual_format)
     elif args.compare_with:
         print(f"Failed to visualize report for cmpw", file = sys.stderr)
 
     if cmp_dfs.cmp2_df is not None and not cmp_dfs.cmp2_df.empty:
-        visualize_report(cmp_dfs.cmp2_df, cfg, args.visual_format, f"{args.cmp[1]}_{args.cmp[0]}")
+        visualize_report(cmp_dfs.cmp2_df, cfg, args.visual_format)
     elif args.compare_two:
         print(f"Failed to visualize report for cmp2", file = sys.stderr)
 
