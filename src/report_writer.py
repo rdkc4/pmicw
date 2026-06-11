@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import numpy as np
 import pandas as pd
 
@@ -15,7 +16,7 @@ MD_REPORT_ROW_COLORS = {
     MetricStatus.IRRELEVANT:  "background-color: transparent; color: #555555;"
 }
 
-def write_report(df: pd.DataFrame, report_formats: list[ReportFormatOptions]) -> ComparisonReports:
+def write_report(df: pd.DataFrame, report_formats: list[ReportFormatOptions], workload_name: str) -> ComparisonReports:
     reports     = ComparisonReports()
     report_data = {ComparisonCols.COMPARISON: []}
     grouped     = df.groupby(["baseline_run_id", "contender_run_id"], sort = False)
@@ -38,17 +39,17 @@ def write_report(df: pd.DataFrame, report_formats: list[ReportFormatOptions]) ->
     REPORT_DIR.mkdir(parents = True, exist_ok = True)
 
     if ReportFormatOptions.CSV in report_formats:
-        path        = generate_report_path("report_csv", ReportFormatOptions.CSV)
+        path        = generate_report_path(f"{normalize_name(workload_name)}_report_csv", ReportFormatOptions.CSV)
         reports.csv = str(path)
         write_csv_report(df, path)
 
     if ReportFormatOptions.JSON in report_formats:
-        path         = generate_report_path("report_json", ReportFormatOptions.JSON)
+        path         = generate_report_path(f"{normalize_name(workload_name)}_report_json", ReportFormatOptions.JSON)
         reports.json = str(path)
         write_json_report(report_data, path)
 
     if ReportFormatOptions.MD in report_formats:
-        path       = generate_report_path("report_md", ReportFormatOptions.MD)
+        path       = generate_report_path(f"{normalize_name(workload_name)}_report_md", ReportFormatOptions.MD)
         reports.md = str(path)
         write_md_report(report_data, path)
 
@@ -124,5 +125,13 @@ def write_md_report(report_data: dict, output_path: Path) -> None:
         
     output_path.write_text("\n".join(lines), encoding = "utf-8")
 
-def generate_report_path(relative_path, format: str) -> Path:
-    return REPORT_DIR / f"{relative_path}.{format}"
+def normalize_name(name: str) -> str:
+    name = name.lower()
+    name = re.sub(r'[^a-z0-9_]', '_', name)
+    name = re.sub(r'_+', '_', name)
+    name = name.strip('_')
+    
+    return name
+
+def generate_report_path(relative_path: str, ext: str) -> Path:
+    return REPORT_DIR / f"{relative_path}.{ext}"

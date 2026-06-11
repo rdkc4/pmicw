@@ -52,8 +52,19 @@ def visualize_table(df: pd.DataFrame) -> str | None:
     if not rows:
         return None
 
-    status_bg_map = {"regression": "#7f1d1d", "improvement": "#14532d", "noise": "#78350f", "interesting": "#1e3a8a"}
-    status_fg_map = {"regression": "#fecaca", "improvement": "#bbf7d0", "noise": "#fef08a", "interesting": "#bfdbfe"}
+    status_bg_map = {
+        "regression":  "rgba(239, 68, 68, 0.15)",
+        "improvement": "rgba(34, 197, 94, 0.15)",
+        "noise":       "rgba(148, 163, 184, 0.12)",
+        "interesting": "rgba(56, 189, 248, 0.15)"
+    }
+
+    status_fg_map = {
+        "regression":  "#fca5a5",
+        "improvement": "#86efac",
+        "noise":       "#94a3b8",
+        "interesting": "#38bdf8"
+    }
 
     title_html = f"""
     <div class="table-title-area">
@@ -75,12 +86,12 @@ def visualize_table(df: pd.DataFrame) -> str | None:
         
         table_rows += f"""
         <tr>
-            <td style="color: {TEXT_MAIN}; text-align: left;">{escape(str(row['metric']))}</td>
-            <td style="color: {TEXT_MUTED}; font-family: monospace;">{escape(str(row['baseline_id'][:8]))}</td>
-            <td style="color: {TEXT_MUTED};">{escape(str(row['baseline_ts']))}</td>
-            <td style="color: {TEXT_MAIN}; text-align: right;">{row['baseline_val']:.4g}</td>
-            <td style="color: {TEXT_MAIN}; text-align: right;">{row['contender_val']:.4g}</td>
-            <td style="color: {TEXT_MAIN}; text-align: right; font-weight: 500;">{row['delta_pct']:+.2f}%</td>
+            <td {status_style}>{escape(str(row['metric']))}</td>
+            <td {status_style}>{escape(str(row['baseline_id'][:8]))}</td>
+            <td {status_style}>{escape(str(row['baseline_ts']))}</td>
+            <td {status_style}>{row['baseline_val']:.4g}</td>
+            <td {status_style}>{row['contender_val']:.4g}</td>
+            <td {status_style}>{row['delta_pct']:+.2f}%</td>
             <td {status_style}>{escape(status_clean.upper()) if status_clean else 'UNKNOWN'}</td>
         </tr>
         """

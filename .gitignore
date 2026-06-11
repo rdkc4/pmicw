@@ -3,6 +3,7 @@ web/index.html
 # Directory for reports
 web/reports/
 web/visual/
+web/workloads
 
 # Actions
 actions-runner/

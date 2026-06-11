@@ -178,17 +178,20 @@ if [[ -z "$JSON_RESULT" ]]; then
 fi
 
 RUN_ID=$(echo "$JSON_RESULT" | jq -r '.run_id // empty' 2>/dev/null)
+WORKLOAD=$(echo "$JSON_RESULT" | jq -r '.workload_name // empty' 2>/dev/null)
 CSV_PATH=$(echo "$JSON_RESULT" | jq -r '.csv_path // empty' 2>/dev/null)
 
-if [[ -z "$RUN_ID" ]] || [[ -z "$CSV_PATH" ]]; then
+
+if [[ -z "$RUN_ID" ]] || [[ -z "$WORKLOAD" ]] || [[ -z "$CSV_PATH" ]]; then
     echo "ERROR: Required keys missing or empty!" >&2
     echo "Extracted Run ID: '$RUN_ID'" >&2
+    echo "Extracted Workload Name: '$WORKLOAD'" >&2
     echo "Extracted CSV Path: '$CSV_PATH'" >&2
     exit 1
 fi
 
 if [[ ${#COMPARISON_COMMAND[@]} -gt 1 ]]; then
-    COMPARISON_COMMAND+=("-rid" "$RUN_ID" "-p" "$CSV_PATH")
+    COMPARISON_COMMAND+=("-rid" "$RUN_ID" "-wn" "$WORKLOAD" "-p" "$CSV_PATH")
     "${COMPARISON_COMMAND[@]}"
 fi
 

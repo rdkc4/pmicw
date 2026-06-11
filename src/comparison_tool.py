@@ -14,14 +14,26 @@ from plot_config import PlotGroupConfig, load_plot_config
 from report_visualizer import visualize_report
 from report_writer import write_report
 
-def compare_n(n: int, contender_id: str, path: str, threshold_cfg: dict[str, ThresholdConfig]) -> pd.DataFrame:
-    comparison_data = execute_query(fetch_last_n(n, contender_id, path))
+def compare_n(
+    n:             int, 
+    contender_id:  str, 
+    workload_name: str, 
+    path:          str, 
+    threshold_cfg: dict[str, ThresholdConfig]
+) -> pd.DataFrame:
+    comparison_data = execute_query(fetch_last_n(n, contender_id, workload_name, path))
     deltas_df       = compute_deltas(comparison_data, contender_id, threshold_cfg)
 
     return deltas_df
 
-def compare_two(baseline_id: str, contender_id: str, path: str, threshold_cfg: dict[str, ThresholdConfig]) -> pd.DataFrame:
-    comparison_data = execute_query(fetch_two(baseline_id, contender_id, path))
+def compare_two(
+    baseline_id:   str, 
+    contender_id:  str, 
+    workload_name: str, 
+    path:          str, 
+    threshold_cfg: dict[str, ThresholdConfig]
+) -> pd.DataFrame:
+    comparison_data = execute_query(fetch_two(baseline_id, contender_id, workload_name, path))
     deltas_df       = compute_deltas(comparison_data, contender_id, threshold_cfg)
 
     return deltas_df
@@ -29,15 +41,15 @@ def compare_two(baseline_id: str, contender_id: str, path: str, threshold_cfg: d
 def compare(args: argparse.Namespace, threshold_cfg: dict[str, ThresholdConfig]) -> ComparisonDataFrames:
     cmp_dfs = ComparisonDataFrames()
     if args.compare and args.run_id:
-        cmp_dfs.cmp_df  = compare_n(args.compare, args.run_id, args.path, threshold_cfg)
+        cmp_dfs.cmp_df  = compare_n(args.compare, args.run_id, args.workload_name, args.path, threshold_cfg)
     
     if args.compare_with and args.run_id:
-        cmp_dfs.cmpw_df = compare_two(args.compare_with, args.run_id, args.path, threshold_cfg)
+        cmp_dfs.cmpw_df = compare_two(args.compare_with, args.run_id, args.workload_name, args.path, threshold_cfg)
     
     if args.compare_two:
         baseline        = args.compare_two[0]
         contender       = args.compare_two[1]
-        cmp_dfs.cmp2_df = compare_two(baseline, contender, args.path, threshold_cfg)
+        cmp_dfs.cmp2_df = compare_two(baseline, contender, args.workload_name, args.path, threshold_cfg)
 
     return cmp_dfs
 
@@ -45,23 +57,27 @@ def report(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace) -> Compariso
     report_groups = ComparisonReportGroups()
 
     if cmp_dfs.cmp_df is not None and not cmp_dfs.cmp_df.empty:
-        report_groups.cmp = write_report(cmp_dfs.cmp_df, args.report_format)
+        report_groups.cmp = write_report(cmp_dfs.cmp_df, args.report_format, args.workload_name)
     elif args.compare:
         print(f"Failed to write report for cmp", file = sys.stderr)
 
     if cmp_dfs.cmpw_df is not None and not cmp_dfs.cmpw_df.empty:
-        report_groups.cmpw = write_report(cmp_dfs.cmpw_df, args.report_format)
+        report_groups.cmpw = write_report(cmp_dfs.cmpw_df, args.report_format, args.workload_name)
     elif args.compare_with:
         print(f"Failed to write report for cmpw", file = sys.stderr)
 
     if cmp_dfs.cmp2_df is not None and not cmp_dfs.cmp2_df.empty:
-        report_groups.cmp2 = write_report(cmp_dfs.cmp2_df, args.report_format)
+        report_groups.cmp2 = write_report(cmp_dfs.cmp2_df, args.report_format, args.workload_name)
     elif args.compare_two:
         print(f"Failed to write report for cmp2", file = sys.stderr)
 
     return report_groups
 
-def visualize(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace, cfg: dict[str, PlotGroupConfig]) -> ComparisonVisualGroups:
+def visualize(
+    cmp_dfs: ComparisonDataFrames, 
+    args:    argparse.Namespace, 
+    cfg:     dict[str, PlotGroupConfig]
+) -> ComparisonVisualGroups:
     visual_groups = ComparisonVisualGroups()
 
     if cmp_dfs.cmp_df is not None and not cmp_dfs.cmp_df.empty:
@@ -89,7 +105,7 @@ def main() -> None:
 
     report_groups = report(cmp_dfs, args)
     visual_groups = visualize(cmp_dfs, args, plot_cfg)
-    generate_dashboard(report_groups, visual_groups)
+    generate_dashboard(report_groups, visual_groups, args.workload_name)
 
 if __name__ == "__main__":
     main()
