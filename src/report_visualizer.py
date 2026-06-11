@@ -5,7 +5,16 @@ import plotly.express as px
 from html import escape
 
 from cli_parser import VisualFormatOptions
-from comparison_context import BORDER_COLOR, CONTENDER_ZONE, DARK_BG, PANEL_BG, TEXT_MAIN, TEXT_MUTED, ComparisonCols, ComparisonVisuals
+from comparison_context import (
+    BORDER_COLOR, 
+    CONTENDER_ZONE, 
+    DARK_BG, 
+    PANEL_BG, 
+    TEXT_MAIN, 
+    TEXT_MUTED, 
+    ComparisonCols, 
+    ComparisonVisuals
+)
 from plot_config import PlotGroupConfig
 
 def visualize_report(
@@ -110,7 +119,7 @@ def visualize_chart(df: pd.DataFrame) -> go.Figure | None:
         return None
 
     sample_mdf = df[df[ComparisonCols.METRIC] == metrics[0]].copy()
-    timeline = build_ordered_timeline(sample_mdf, contender_id)
+    timeline   = build_ordered_timeline(sample_mdf, contender_id)
     if not timeline:
         return None
 
@@ -120,7 +129,7 @@ def visualize_chart(df: pd.DataFrame) -> go.Figure | None:
     for entry in timeline:
         xtick_labels.append(entry["ts_str"])
 
-    colors = px.colors.qualitative.Pastel
+    colors = px.colors.qualitative.Prism
     fig    = go.Figure()
 
     for idx, metric in enumerate(metrics):
@@ -213,7 +222,7 @@ def visualize_graph(df: pd.DataFrame) -> go.Figure | None:
         return None
  
     fig          = go.Figure()
-    colors       = px.colors.qualitative.Pastel
+    colors       = px.colors.qualitative.Prism
     global_xs    = global_timestamps = ctdr_idx = None
     all_y_values = []
  

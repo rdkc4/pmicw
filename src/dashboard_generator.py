@@ -75,7 +75,7 @@ def generate_dashboard(
             inner_id      = f"{section_key}-{safe_id(group_name)}"
             
             inner_tab_buttons += (
-                f'<button class="tab-btn inner-tab-btn {active_inner}" '
+                f'<button class="tab-btn tab-btn {active_inner}" '
                 f'data-target="{inner_id}" data-level="inner">'
                 f'{escape(str(group_name)).upper()}</button>\n'
             )
@@ -243,7 +243,7 @@ def build_download_bar(reports) -> str:
 
         icon, color = ICON_MAP[fmt]
         filename    = Path(path).name
-        href        = f"../reports/{filename}"
+        href        = f"reports/{filename}"
 
         buttons += (
             f'<a class="download-btn" href="{href}" download="{filename}" '
