@@ -63,7 +63,7 @@ chmod +x run.sh
 echo "Setup [6/7]: Making Python modules executable..."
 chmod +x src/workload_runner.py
 chmod +x src/comparison_tool.py
-chmod +x workloads/test.py
+chmod +x workloads/test*
 
 echo "Setup [7/7]: Setup complete"
 echo

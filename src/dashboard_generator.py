@@ -13,7 +13,7 @@ from comparison_context import (
     ComparisonReportGroups, 
     ComparisonVisualGroups
 )
-from paths import INDEX_HTML, WEB_DIR
+from paths import INDEX_HTML, WORKLOADS_DIR
 
 ICON_MAP = {
     "csv": (
@@ -37,11 +37,26 @@ ICON_MAP = {
     ),
 }
 
+COMMON_STYLES = f"""
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: {DARK_BG}; color: {TEXT_MAIN}; margin: 0; padding: 20px; }}
+    .header {{ margin-bottom: 25px; border-bottom: 1px solid {BORDER_COLOR}; padding-bottom: 15px; display: flex; justify-content: space-between; align-items: flex-end; }}
+    .header-titles {{ flex-grow: 1; }}
+    .header h1 {{ margin: 0 0 5px 0; font-size: 24px; letter-spacing: -0.5px; }}
+    .header p {{ margin: 0; color: {TEXT_MUTED}; font-size: 14px; }}
+    .back-btn {{ display: inline-flex; align-items: center; gap: 6px; color: {TEXT_MUTED}; text-decoration: none; font-size: 13px; font-weight: 600; padding: 8px 16px; border: 1px solid {BORDER_COLOR}; border-radius: 4px; background: {PANEL_BG}; transition: all 0.2s; }}
+    .back-btn:hover {{ color: {TEXT_MAIN}; border-color: {CONTENDER_ZONE}; }}
+"""
+
 def generate_dashboard(
     report_groups: ComparisonReportGroups,
     visual_groups: ComparisonVisualGroups,
+    workload_name: str
 ) -> None:
-    WEB_DIR.mkdir(parents = True, exist_ok = True)
+    WORKLOADS_DIR.mkdir(parents = True, exist_ok = True)
+    
+    safe_workload = safe_id(workload_name)
+    workload_filename = f"{safe_workload}.html"
+    workload_path = WORKLOADS_DIR / workload_filename
 
     cmp_sections = [
         ("cmp",  report_groups.cmp,  visual_groups.cmp),
@@ -80,7 +95,7 @@ def generate_dashboard(
                 f'{escape(str(group_name)).upper()}</button>\n'
             )
             
-            download_bar = build_download_bar(reports)
+            download_bar = build_download_bar(reports, is_nested=True)
             panel_html   = create_group_panel(visuals.table, visuals.chart, visuals.graph)
             
             inner_tab_contents += (
@@ -99,18 +114,16 @@ def generate_dashboard(
             f'style="display:{display_outer};">{section_html}</div>\n'
         )
         
-    html_payload = f"""
+    workload_payload = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="utf-8">
-        <title>PMICW Dashboard</title>
+        <title>Performance Profile - {escape(workload_name)}</title>
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <meta name="workload-display-name" content="{escape(workload_name)}">
         <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: {DARK_BG}; color: {TEXT_MAIN}; margin: 0; padding: 20px; }}
-            .header {{ margin-bottom: 25px; border-bottom: 1px solid {BORDER_COLOR}; padding-bottom: 15px; }}
-            .header h1 {{ margin: 0 0 5px 0; font-size: 24px; letter-spacing: -0.5px; }}
-            .header p {{ margin: 0; color: {TEXT_MUTED}; font-size: 14px; }}
+            {COMMON_STYLES}
             .tab-bar, .inner-tab-bar {{ display: flex; gap: 8px; border-bottom: 2px solid {BORDER_COLOR}; padding-bottom: 0; margin-bottom: 20px; }}
             .inner-tab-bar {{ margin-top: 8px; border-bottom-color: {BORDER_COLOR}; opacity: 0.85; }}
             .tab-btn {{ background: none; border: none; color: {TEXT_MUTED}; padding: 12px 20px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; border-bottom: 3px solid transparent; margin-bottom: -2px; }}
@@ -215,8 +228,13 @@ def generate_dashboard(
     </head>
     <body>
         <div class="header">
-            <h1>PMICW Dashboard</h1>
-            <p>Automated CI Evaluation Results Timeline &bull; Static Dashboard Archive Site</p>
+            <div class="header-titles">
+                <h1>Workload Profile: {escape(workload_name)}</h1>
+                <p>Automated CI Evaluation Results Metrics &bull; Profile Report</p>
+            </div>
+            <div>
+                <a href="../index.html" class="back-btn">← Back to Dashboard Hub</a>
+            </div>
         </div>
         <div class="tab-bar">
             {outer_tab_buttons}
@@ -225,16 +243,146 @@ def generate_dashboard(
     </body>
     </html>
     """
-    INDEX_HTML.write_text(html_payload, encoding="utf-8")
-    print(f"Dashboard index.html saved to: {INDEX_HTML}")
+    workload_path.write_text(workload_payload, encoding = "utf-8")
+    print(f"Updated workload component: workloads/{workload_path.name}")
 
+    discovered_links = []
+    for file in WORKLOADS_DIR.glob("*.html"):
+        display_name = file.stem
+        try:
+            content = file.read_text(encoding="utf-8")
+            match = re.search(r'<meta name="workload-display-name" content="([^"]+)">', content)
+            if match:
+                display_name = match.group(1)
+        except Exception:
+            pass
 
-def build_download_bar(reports) -> str:
+        discovered_links.append((file.name, display_name))
+
+    discovered_links.sort(key = lambda item: item[1].lower())
+
+    card_items_html = ""
+    for filename, name in discovered_links:
+        relative_target_link = f"workloads/{filename}"
+        card_items_html += f"""
+        <a class="workload-card" href="{relative_target_link}">
+            <div>
+                <div class="workload-card-badge">WORKLOAD PROFILE</div>
+                <div class="workload-card-title">{escape(name)}</div>
+                <div class="workload-card-meta">Interactive metrics, regressions, multi-variant trends, and differential raw data tables.</div>
+            </div>
+            <div class="workload-card-footer">
+                <span>Explore Metrics</span>
+                <span class="arrow-icon">→</span>
+            </div>
+        </a>
+        """
+
+    index_payload = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>PMICW Master Dashboard Index</title>
+        <style>
+            {COMMON_STYLES}
+            .grid-container {{
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+                gap: 20px;
+                margin-top: 25px;
+            }}
+            .workload-card {{
+                background-color: {PANEL_BG};
+                border: 1px solid {BORDER_COLOR};
+                border-radius: 8px;
+                padding: 24px;
+                text-decoration: none;
+                transition: all 0.2s ease-in-out;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                min-height: 160px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+            }}
+            .workload-card:hover {{
+                border-color: {CONTENDER_ZONE};
+                background-color: #0f2131;
+                transform: translateY(-3px);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+            }}
+            .workload-card-badge {{
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                color: {CONTENDER_ZONE};
+                font-weight: 700;
+                margin-bottom: 8px;
+            }}
+            .workload-card-title {{
+                font-size: 20px;
+                font-weight: 700;
+                color: {TEXT_MAIN};
+                margin-bottom: 12px;
+                word-break: break-all;
+                letter-spacing: -0.3px;
+            }}
+            .workload-card-meta {{
+                font-size: 13px;
+                color: {TEXT_MUTED};
+                line-height: 1.5;
+                margin-bottom: 16px;
+            }}
+            .workload-card-footer {{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-size: 13px;
+                font-weight: 600;
+                color: {TEXT_MAIN};
+                border-top: 1px solid {BORDER_COLOR};
+                padding-top: 14px;
+                opacity: 0.8;
+                transition: opacity 0.2s;
+            }}
+            .workload-card:hover .workload-card-footer {{
+                opacity: 1;
+            }}
+            .arrow-icon {{
+                transition: transform 0.2s;
+            }}
+            .workload-card:hover .arrow-icon {{
+                transform: translateX(4px);
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="header-titles">
+                <h1>PMICW Master Dashboard Hub</h1>
+                <p>Automated CI Evaluation Results Timeline &bull; Static Dashboard Archive Site</p>
+            </div>
+        </div>
+        
+        <h3 style="color: {TEXT_MAIN}; font-size: 15px; margin-bottom: 5px; font-weight: 600;">Tracked Performance Workloads ({len(discovered_links)})</h3>
+        <div class="grid-container">
+            {card_items_html}
+        </div>
+    </body>
+    </html>
+    """
+    
+    INDEX_HTML.write_text(index_payload, encoding = "utf-8")
+    print(f"Regenerated central hub mapping: {INDEX_HTML.name}")
+
+def build_download_bar(reports, is_nested: bool = False) -> str:
     items = [
         ("csv",  reports.csv,  "Download CSV"),
         ("json", reports.json, "Download JSON"),
         ("md",   reports.md,   "Download Markdown"),
     ]
+
+    path_prefix = "../" if is_nested else ""
 
     buttons = ""
     for fmt, path, label in items:
@@ -243,7 +391,7 @@ def build_download_bar(reports) -> str:
 
         icon, color = ICON_MAP[fmt]
         filename    = Path(path).name
-        href        = f"reports/{filename}"
+        href        = f"{path_prefix}reports/{filename}"
 
         buttons += (
             f'<a class="download-btn" href="{href}" download="{filename}" '
@@ -282,11 +430,10 @@ def create_group_panel(
     panel_html += '</div>'
     return panel_html
 
-
 def safe_id(value) -> str:
     value = str(value).strip().lower()
-    value = re.sub(r'[^a-z0-9_-]+', '-', value)
-    value = re.sub(r'-{2,}', '-', value).strip('-')
+    value = re.sub(r'[^a-z0-9_]+', '_', value)
+    value = re.sub(r'_{2,}', '_', value).strip('_')
 
     if not value or not value[0].isalpha():
         value = f"tab-{value}"

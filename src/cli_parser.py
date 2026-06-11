@@ -41,6 +41,10 @@ Expected Syntax:
 
 Core Structural Rules:
  - [options]
+    - `-w`,   `--workload-name` - name of the workload that is being compared
+                                - required
+                                - usage: [--workload-name <name>]
+
     - `-p`,   `--path`    - path to csv where results of the measurements are stored
                           - required
                           - usage: [--path <path>]
@@ -180,6 +184,12 @@ def create_comparison_cli_parser() -> argparse.ArgumentParser:
 
 def add_comparison_options(parser: argparse.ArgumentParser) -> None:
     options = parser.add_argument_group('options')
+
+    options.add_argument(
+        '-wn', '--workload-name',
+        required = True,
+        help     = 'name of the workload that is being compared'
+    )
 
     options.add_argument(
         '-p', '--path',

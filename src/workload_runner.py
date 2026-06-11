@@ -51,8 +51,9 @@ from workload_context import WorkloadContext, WorkloadMetricSelection, WorkloadM
 
 @dataclass
 class RunnerResult:
-    run_id:   str
-    csv_path: str
+    run_id:        str
+    workload_name: str
+    csv_path:      str
 
     def to_json(self):
         return json.dumps(asdict(self))
@@ -207,7 +208,7 @@ def main():
     if not path:
         sys.exit(1)
 
-    result = RunnerResult(str(measurement.metadata.run_id), str(path))
+    result = RunnerResult(str(measurement.metadata.run_id), measurement.workload.name, str(path))
     print(result.to_json(), file = sys.stdout)
 
 if __name__ == "__main__":
