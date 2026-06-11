@@ -8,7 +8,9 @@ on:
       - 'web/visual/**'
       - 'web/workloads/**'
       - 'web/index.html'
+
   pull_request:
+
   workflow_dispatch:
     inputs:
       workload:
@@ -40,38 +42,20 @@ jobs:
         run: |
           ./setup.sh
 
-      - name: Restore Previous Pages Artifacts
+      - name: Restore previous benchmark state
         if: github.ref == 'refs/heads/main'
         continue-on-error: true
-        run: |
-          echo "Querying GitHub deployments API..."
-          
-          ARTIFACT_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/pages/deployments" \
-            | grep -m 1 "artifact_url" | cut -d'"' -f4)
-          
-          if [ ! -z "$ARTIFACT_URL" ]; then
-            echo "Downloading live historical web artifacts..."
-            curl -s -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -o latest_pages.tar.gz "$ARTIFACT_URL"
-            
-            mkdir -p web
-            
-            tar -xzf latest_pages.tar.gz -C web --strip-components=1 || tar -xzf latest_pages.tar.gz -C web
-            
-            rm latest_pages.tar.gz
-            echo "Historic state recovered successfully."
-          else
-            echo "No historic deployments discovered. Initializing fresh workspace structure."
-            mkdir -p web
-          fi
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-state
+          path: web
 
       - name: Run workload benchmark
         run: |
           export PATH="$GITHUB_WORKSPACE/.venv/bin:$PATH"
 
           WORKLOAD="${{ github.event.inputs.workload }}"
-          WORKLOAD=${WORKLOAD:-test.py} 
+          WORKLOAD=${WORKLOAD:-test.py}
 
           ./run.sh \
             -m cpu,memory,thread,gpu \
@@ -81,17 +65,13 @@ jobs:
             -vfmt table,chart,graph \
             ./workloads/$WORKLOAD
 
-      - name: Commit benchmark results dataset
+      - name: Save benchmark state
         if: github.ref == 'refs/heads/main'
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          
-          git add web/data/
-          git diff --cached --quiet || git commit -m "Update benchmark results dataset [skip ci]"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-state
+          path: web
+          retention-days: 90
 
       - name: Verify Combined Pages Directory
         run: |
