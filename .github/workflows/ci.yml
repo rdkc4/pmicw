@@ -7,41 +7,19 @@ on:
       - 'web/reports/**'
       - 'web/visual/**'
       - 'web/workloads/**'
-      - 'web/index.html'
-    branches:
-      - main
-
   pull_request:
-    branches:
-      - main
-
-  workflow_dispatch:
-    inputs:
-      workload:
-        description: "Select which workload to run"
-        required: true
-        default: test.py
-        type: choice
-        options:
-          - test.py
-          - test2.py
-          - test3.py
 
 permissions:
   contents: write
   pages: write
   id-token: write
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   benchmark:
     runs-on: self-hosted
 
     steps:
-      - name: Checkout main repository
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -50,33 +28,9 @@ jobs:
         run: |
           ./setup.sh
 
-      - name: Fetch previous dashboards from gh-pages
-        if: github.ref == 'refs/heads/main'
-        continue-on-error: true
-        run: |
-          git worktree prune || true 
-          rm -rf old_pages
-          
-          git fetch origin gh-pages:gh-pages || true
-          if git show-ref --quiet refs/heads/gh-pages; then
-            git worktree add old_pages gh-pages
-          else
-            echo "No gh-pages branch found. Will create fresh dashboards."
-          fi
-
-      - name: Restore previous dashboards
-        run: |
-          mkdir -p web
-          if [ -d "old_pages" ]; then
-            echo "Restoring historic views..."
-            rsync -av --exclude='.git/' --exclude='data/' old_pages/ web/
-          fi
-
       - name: Run workload benchmark
         run: |
           export PATH="$GITHUB_WORKSPACE/.venv/bin:$PATH"
-          WORKLOAD="${{ inputs.workload }}"
-          WORKLOAD=${WORKLOAD:-test.py}
 
           ./run.sh \
             -m cpu,memory,thread,gpu \
@@ -84,34 +38,36 @@ jobs:
             -cmp 10 \
             -rfmt json,md,csv \
             -vfmt table,chart,graph \
-            ./workloads/$WORKLOAD
+            ./workloads/test.py
 
-      - name: Commit benchmark results dataset to main
+      - name: Commit benchmark results
         if: github.ref == 'refs/heads/main'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
           git add web/data/
-          
-          if ! git diff --cached --quiet; then
-            git commit -m "Update benchmark results dataset [skip ci]"
-            git pull --rebase origin main
-            git push origin HEAD:main
-          else
-            echo "No changes to data."
-          fi
+          git diff --cached --quiet || git commit -m "Update benchmark results [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify Combined Pages Directory
+      - name: Verify Pages Content
         run: |
           ls -R web
 
       - name: Upload Pages Artifact
-        if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./web
+          path: web
 
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: benchmark
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+
+    steps:
       - name: Deploy to GitHub Pages
-        if: github.ref == 'refs/heads/main'
-        id: deployment
         uses: actions/deploy-pages@v4
