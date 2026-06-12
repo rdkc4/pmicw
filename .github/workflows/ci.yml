@@ -141,10 +141,10 @@ jobs:
           mkdir -p "$WORKDIR/workloads"
           mkdir -p "$WORKDIR/reports"
 
-          cp site/web/index.html "$WORKDIR/index.html"
+          cp site/index.html "$WORKDIR/index.html"
 
-          rsync -av site/web/workloads/ "$WORKDIR/workloads/"
-          rsync -av site/web/reports/ "$WORKDIR/reports/"
+          rsync -av site/workloads/ "$WORKDIR/workloads/"
+          rsync -av site/reports/ "$WORKDIR/reports/"
 
           touch "$WORKDIR/.nojekyll"
 
