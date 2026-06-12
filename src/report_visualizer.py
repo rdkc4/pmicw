@@ -22,6 +22,17 @@ def visualize_report(
     plot_groups:    dict[str, PlotGroupConfig],
     visual_formats: list[VisualFormatOptions]
 ) -> dict[str, ComparisonVisuals]:
+    """
+    Entry point for report visualization
+
+    df: comparison data\n
+    plot_groups: plotting groups defined in plot configuration\n
+    visual_formats: selected visualization formats
+
+    rows with nan, inf, and -inf values are dropped
+
+    Returns dict that maps plot group name to comparison visuals
+    """
     tabs_data = {}
     for group_name, group_cfg in plot_groups.items():
         metrics   = group_cfg.get_metric_names()
@@ -48,6 +59,9 @@ def visualize_report(
     return tabs_data
 
 def visualize_table(df: pd.DataFrame) -> str | None:
+    """
+    Visualizes data frame as HTML table
+    """
     rows = build_timeline_records(df)
     if not rows:
         return None
@@ -123,6 +137,11 @@ def visualize_table(df: pd.DataFrame) -> str | None:
 
 
 def visualize_chart(df: pd.DataFrame) -> go.Figure | None:
+    """
+    Visualizes data frame as bar chart ordered by timestamp
+
+    Contender run is always displayed last
+    """
     metrics      = df[ComparisonCols.METRIC].unique()
     contender_id = get_contender_id(df)
     
@@ -225,6 +244,11 @@ def visualize_chart(df: pd.DataFrame) -> go.Figure | None:
     return fig
 
 def visualize_graph(df: pd.DataFrame) -> go.Figure | None:
+    """
+    Visualizes dataframe as graph ordered by timestamp
+
+    Contender run is always displayed last
+    """
     metrics      = df[ComparisonCols.METRIC].unique()
     contender_id = get_contender_id(df)
     baseline_ids = get_unique_baselines(df)
