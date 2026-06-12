@@ -27,6 +27,8 @@ def load_thresholds_config(yaml_path: Path | str) -> dict[str, ThresholdConfig]:
     """
     Loads the yaml threshold configuration
 
+    yaml_path: path to a yaml configuration
+
     Returns dictionary of metrics (suffix included) mapped to their threshold configurations
     """
     with open(yaml_path, "r", encoding = "utf-8") as f:

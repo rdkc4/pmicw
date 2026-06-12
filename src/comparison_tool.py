@@ -21,6 +21,18 @@ def compare_n(
     path:          str, 
     threshold_cfg: dict[str, ThresholdConfig]
 ) -> pd.DataFrame:
+    """
+    Compares last N measurements with contender
+
+    n: number of previous measurements\n
+    contender_id: id of the contender run\n
+    workload_name: name of the workload that is being benchmarked\n
+    path: path to a csv storage of the results\n
+    threshold_cfg: configuration defining the thresholds of the metrics
+
+    Returns the data frame containing comparison data,
+    or empty data frame if contender wasn't found or if contender is the only run
+    """
     comparison_data = execute_query(fetch_last_n(n, contender_id, workload_name, path))
     deltas_df       = compute_deltas(comparison_data, contender_id, threshold_cfg)
 
@@ -33,12 +45,34 @@ def compare_two(
     path:          str, 
     threshold_cfg: dict[str, ThresholdConfig]
 ) -> pd.DataFrame:
+    """
+    Compares two measurements
+
+    baseline_id: id of the baseline run\n
+    contender_id: id of the contender run\n
+    workload_name: name of the workload that is being benchmarked\n
+    path: path to a csv storage of the results\n
+    threshold_cfg: configuration defining the thresholds of the metrics
+
+    Returns the data frame containing comparison data,
+    or empty data frame if either baseline or contender weren't found
+    """
     comparison_data = execute_query(fetch_two(baseline_id, contender_id, workload_name, path))
     deltas_df       = compute_deltas(comparison_data, contender_id, threshold_cfg)
 
     return deltas_df
 
 def compare(args: argparse.Namespace, threshold_cfg: dict[str, ThresholdConfig]) -> ComparisonDataFrames:
+    """
+    Entry point for comparison data computation
+
+    args: parsed CLI arguments\n
+    threshold_cfg: configuration defining the thresholds of the metrics
+
+    Performs compare, compare-with and compare-two, depending on the options selected via CLI
+
+    Returns comparison data frames grouped by comparison type
+    """
     cmp_dfs = ComparisonDataFrames()
     if args.compare and args.run_id:
         cmp_dfs.cmp_df  = compare_n(args.compare, args.run_id, args.workload_name, args.path, threshold_cfg)
@@ -54,6 +88,14 @@ def compare(args: argparse.Namespace, threshold_cfg: dict[str, ThresholdConfig])
     return cmp_dfs
 
 def report(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace) -> ComparisonReportGroups:
+    """
+    Entry point for comparison report generation
+
+    cmp_dfs: comparison data frames\n
+    args: parsed CLI arguments
+
+    Returns comparison reports grouped by comparison type
+    """
     report_groups = ComparisonReportGroups()
 
     if cmp_dfs.cmp_df is not None and not cmp_dfs.cmp_df.empty:
@@ -74,24 +116,33 @@ def report(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace) -> Compariso
     return report_groups
 
 def visualize(
-    cmp_dfs: ComparisonDataFrames, 
-    args:    argparse.Namespace, 
-    cfg:     dict[str, PlotGroupConfig]
+    cmp_dfs:  ComparisonDataFrames, 
+    args:     argparse.Namespace, 
+    plot_cfg: dict[str, PlotGroupConfig]
 ) -> ComparisonVisualGroups:
+    """
+    Entry point for comparison visualization
+
+    cmp_dfs: comparison data frames\n
+    args: parsed CLI arguments\n
+    plot_cfg: configuration defining metrics that should be displayed
+
+    Returns comparison visualization grouped by comparison type
+    """
     visual_groups = ComparisonVisualGroups()
 
     if cmp_dfs.cmp_df is not None and not cmp_dfs.cmp_df.empty:
-        visual_groups.cmp = visualize_report(cmp_dfs.cmp_df, cfg, args.visual_format)
+        visual_groups.cmp = visualize_report(cmp_dfs.cmp_df, plot_cfg, args.visual_format)
     elif args.compare:
         print(f"Failed to visualize report for cmp", file = sys.stderr)
     
     if cmp_dfs.cmpw_df is not None and not cmp_dfs.cmpw_df.empty:
-        visual_groups.cmpw = visualize_report(cmp_dfs.cmpw_df, cfg, args.visual_format)
+        visual_groups.cmpw = visualize_report(cmp_dfs.cmpw_df, plot_cfg, args.visual_format)
     elif args.compare_with:
         print(f"Failed to visualize report for cmpw", file = sys.stderr)
 
     if cmp_dfs.cmp2_df is not None and not cmp_dfs.cmp2_df.empty:
-        visual_groups.cmp2 = visualize_report(cmp_dfs.cmp2_df, cfg, args.visual_format)
+        visual_groups.cmp2 = visualize_report(cmp_dfs.cmp2_df, plot_cfg, args.visual_format)
     elif args.compare_two:
         print(f"Failed to visualize report for cmp2", file = sys.stderr)
 
