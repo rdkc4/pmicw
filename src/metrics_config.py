@@ -31,6 +31,9 @@ TotalsSpec = list[Literal["numerator", "denominator"]]
 STATS_SUFFIX = ["mean", "median", "stddev", "min", "max"]
 
 class Segments(StrEnum):
+    """
+    Segments of metrics captured by workload runner
+    """
     WALL_TIME = "wall_time"
     CPU       = "cpu"
     GPU       = "gpu"
@@ -41,6 +44,9 @@ class Segments(StrEnum):
 
 @dataclass
 class BaseMetric:
+    """
+    Parent class of all metrics
+    """
     name:  str
     scale: float = 1.0
 
@@ -67,7 +73,6 @@ class RatioMetric(BaseMetric):
 @dataclass
 class StatsMetric(BaseMetric):
     key:   str   = ""
-    scale: float = 1.0
     total: bool  = False
 
     def output_fields(self) -> list[str]:
@@ -103,12 +108,18 @@ class DerivedMetric(BaseMetric):
 
 @dataclass
 class PerfGroup:
+    """
+    Group of perf events, loaded from metric config
+    """
     name:       str
     events:     list[str]
     use_ld_env: bool = False
 
 @dataclass
 class SegmentConfig:
+    """
+    Segment configuration containing the list of metrics, and perf_groups (only for cpu segment)
+    """
     name:        str
     metrics:     list[BaseMetric]
     perf_groups: list[PerfGroup] = field(default_factory=list)
@@ -148,6 +159,9 @@ class SegmentConfig:
 
 @dataclass
 class ProfilerConfig:
+    """
+    Loaded configuration, maps name of the segment to its configuration
+    """
     segments: dict[str, SegmentConfig]
 
     def csv_fields(self) -> list[str]:
@@ -168,6 +182,9 @@ class ProfilerConfig:
     
 @dataclass
 class PerfGroupConfig:
+    """
+    Perf group extended with optional environment variables
+    """
     name:   str
     events: list[str]
     env:    dict[str, str] | None
@@ -175,6 +192,11 @@ class PerfGroupConfig:
 SAFE_BUILTINS = {"abs", "round", "min", "max", "sum"}
 
 def load_config(path: str = "metrics.yaml") -> ProfilerConfig:
+    """
+    Loads metric configuration into a profiler config
+
+    Checks for validation of the derived metrics
+    """
     with open(path) as f:
         raw = yaml.safe_load(f)
 
@@ -211,6 +233,9 @@ def parse_base_metric(raw: dict) -> dict:
     }
 
 def parse_metric(seg_name: str, raw: dict) -> BaseMetric:
+    """
+    Parses metric based on its type defined in configuration
+    """
     mtype       = raw.get("type")
     base_fields = parse_base_metric(raw)
 
@@ -253,6 +278,9 @@ def parse_metric(seg_name: str, raw: dict) -> BaseMetric:
     )
 
 def validate_derived(cfg: ProfilerConfig) -> None:
+    """
+    Checks if derived metric's formula consists of known symbols
+    """
     available: set[str] = set()
 
     for segment in cfg.segments.values():
