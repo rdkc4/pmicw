@@ -1,8 +1,6 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
-from pathlib import Path
 import plotly.graph_objects as go
-
 import pandas as pd
 
 DARK_BG        = "#0f172a"
@@ -13,12 +11,15 @@ TEXT_MUTED     = "#94a3b8"
 CONTENDER_ZONE = "#38bdf8"
 
 class MetricStatus(StrEnum):
-    NOISE       = "noise"
-    IMPROVEMENT = "improvement"
-    REGRESSION  = "regression"
-    INTERESTING = "interesting"
-    IRRELEVANT  = "irrelevant"
-    INVALID     = "invalid"
+    """
+    Status Entries for the metric after delta computation
+    """
+    NOISE       = "noise"        # defined in configuration
+    IMPROVEMENT = "improvement"  # defined in configuration
+    REGRESSION  = "regression"   # defined in configuration
+    INTERESTING = "interesting"  # values between noise and improvement/regression
+    IRRELEVANT  = "irrelevant"   # metrics that are not defined in configuration
+    INVALID     = "invalid"      # deltas resulting in nan / inf / -inf values
 
 class CSVMetadataCols(StrEnum):
     RUN_ID        = "run_id"
@@ -48,30 +49,45 @@ class ComparisonCols(StrEnum):
 
 @dataclass
 class ComparisonDataFrames:
-    cmp_df:  pd.DataFrame | None = None
-    cmp2_df: pd.DataFrame | None = None
-    cmpw_df: pd.DataFrame | None = None
+    """
+    Result dataframes from comparison
+    """
+    cmp_df:  pd.DataFrame | None = None # result of compare <n>,         None if `-cmp` is not defined 
+    cmp2_df: pd.DataFrame | None = None # result of compare-two <a> <b>, None if `-cmp2` is not defined
+    cmpw_df: pd.DataFrame | None = None # result of compare-with <a>,    None if `-cmpw` is not defined
 
 @dataclass
 class ComparisonReports:
-    csv:  str | None = None
-    md:   str | None = None
-    json: str | None = None
+    """
+    Paths to reports
+    """
+    csv:  str | None = None # None if -rfmt doesn't include csv
+    md:   str | None = None # None if -rfmt doesn't include md
+    json: str | None = None # None if -rfmt doesn't include json
 
 @dataclass
 class ComparisonReportGroups:
+    """
+    Reports grouped by comparison type they're related to
+    """
     cmp:  ComparisonReports = field(default_factory = ComparisonReports)
     cmp2: ComparisonReports = field(default_factory = ComparisonReports)
     cmpw: ComparisonReports = field(default_factory = ComparisonReports)
 
 @dataclass
 class ComparisonVisuals:
-    table: str       | None = None
-    chart: go.Figure | None = None
-    graph: go.Figure | None = None
+    """
+    Graphs generated based on the comparison results
+    """
+    table: str       | None = None # None if -vfmt doesn't include table
+    chart: go.Figure | None = None # None if -vfmt doesn't include chart
+    graph: go.Figure | None = None # None if -vfmt doesn't include graph
 
 @dataclass
 class ComparisonVisualGroups:
+    """
+    Visualizations grouped by comparison type they're related to
+    """
     cmp:  dict[str, ComparisonVisuals] = field(default_factory = dict)
     cmp2: dict[str, ComparisonVisuals] = field(default_factory = dict)
     cmpw: dict[str, ComparisonVisuals] = field(default_factory = dict)

@@ -10,6 +10,11 @@ class MetricSpec:
 
 @dataclass(frozen = True)
 class PlotGroupConfig:
+    """
+    Plot group configuration
+
+    Contains list of metrics that should be visualized together
+    """
     name: str
     metrics: list[MetricSpec]
 
@@ -18,6 +23,14 @@ class PlotGroupConfig:
 
 
 def load_plot_config(yaml_path: Path | str) -> dict[str, PlotGroupConfig]:
+    """
+    Loads the plot configuration
+
+    Maps name of the plot group to its configuration
+
+    Each plot metric is defined by name and suffix (can be empty)\n
+    Metric configurations that don't correspond any columns are ignored.
+    """
     with open(yaml_path, "r", encoding = "utf-8") as f:
         raw_data = yaml.safe_load(f) or {}
 

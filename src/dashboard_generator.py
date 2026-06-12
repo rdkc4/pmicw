@@ -10,7 +10,8 @@ from comparison_context import (
     PANEL_BG,
     TEXT_MAIN, 
     TEXT_MUTED,
-    ComparisonReportGroups, 
+    ComparisonReportGroups,
+    ComparisonReports, 
     ComparisonVisualGroups
 )
 from paths import INDEX_HTML, WORKLOADS_DIR
@@ -52,6 +53,22 @@ def generate_dashboard(
     visual_groups: ComparisonVisualGroups,
     workload_name: str
 ) -> None:
+    """
+    Generates the dashboard, and html page for the workload
+
+    report_groups: comparison reports grouped by comparison type\n
+    visual_groups: comparison visualizations grouped by comparison type\n
+    workload_name: name of the workload that is being visualized
+
+    All available workload comparisons are displayed in index.html
+
+    Each workload has its own .html page,
+    workload's .html page has inner and outer tabs\n
+    Outer tabs are split based on comparison type\n
+    Inner tabs are split by plot group names from the plot configuration
+
+    At the bottom of the page there are download buttons for raw reports in `rfmt` formats
+    """
     WORKLOADS_DIR.mkdir(parents = True, exist_ok = True)
     
     safe_workload = safe_id(workload_name)
@@ -375,7 +392,7 @@ def generate_dashboard(
     INDEX_HTML.write_text(index_payload, encoding = "utf-8")
     print(f"Regenerated central hub mapping: {INDEX_HTML.name}")
 
-def build_download_bar(reports, is_nested: bool = False) -> str:
+def build_download_bar(reports: ComparisonReports, is_nested: bool = False) -> str:
     items = [
         ("csv",  reports.csv,  "Download CSV"),
         ("json", reports.json, "Download JSON"),

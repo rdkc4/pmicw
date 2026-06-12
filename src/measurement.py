@@ -197,7 +197,7 @@ class GPUInfo:
 
         finally:
             try:
-                amdsmi.amdsmi_shut_down()
+                amdsmi.amdsmi_shut_down() # type: ignore
             except:
                 pass
 
@@ -253,6 +253,10 @@ class HardwareInfo:
         return f"{self.cpu.data_to_csv()},{self.gpu.data_to_csv()},{self.memory.data_to_csv()}"
 
 class Metadata:
+    """
+    Aggregated metadata including:
+    run id, timestamp, version, software, and hardware
+    """
     def __init__(self):
         self.run_id    = uuid.uuid4()
         self.timestamp = datetime.datetime.now().isoformat()
@@ -273,7 +277,7 @@ class Metadata:
 @dataclass
 class Workload:
     """
-    Configuration and iteration tracking
+    Workload configuration and iteration tracking
     """
     name:              str 
     iterations:        int
@@ -296,6 +300,14 @@ class Metrics:
         return ",".join(str(self.record[field]) if field in self.record else "" for field in expected_fields)
     
 class Measurement:
+    """
+    Aggregated gathered data containing:
+    metadata, workload, metrics and configuration
+
+    metrics are split into segments defined in metric configuration file
+
+    CSV header consists of metadata, workload, and csv fields defined in metric configuration
+    """
     def __init__(self, metadata: Metadata, workload: Workload, metrics: dict[str, Metrics], cfg: ProfilerConfig):
         self.metadata = metadata
         self.workload = workload

@@ -8,6 +8,17 @@ from measurement import Measurement
 from paths import DATA_DIR
 
 def repo_to_filename(repository: str, workload_name: str, header: str) -> str:
+    """
+    Transforms repository into a csv storage file name
+
+    repository: url to the repository\n
+    workload_name: name of the workload that is being benchmarked\n
+    header: csv header
+
+    Returns formatted filename: account_repository_workload-name_md5(header)
+
+    Note: md5(header) prevents invalidation of csv storage files if workload remains the same and config is changes
+    """
     filename = ""
     if not repository or repository == "N/A":
         filename = f"measurements_{workload_name}"
@@ -51,6 +62,16 @@ def write(
     data_dir:    str | Path = DATA_DIR,
     encoding:    str        = "utf-8",
 ) -> Path | None:
+    """
+    Appends csv storage with a new measurement
+
+    measurement: benchmarking results of the current run
+    data_dir: csv storage directory
+    encoding: text encoding
+
+    Returns path to a csv storage file if write was successful,
+    None otherwise
+    """
 
     filename = repo_to_filename(
         measurement.metadata.version.repository, 
@@ -79,11 +100,21 @@ def write_batch(
     data_dir:     str | Path = DATA_DIR,
     encoding:     str        = "utf-8",
 ) -> tuple[Path | None, int, int]:
+    """
+    Appends csv storage with a sequence of measurements
+
+    measurements: sequence of measurements
+    data_dir: csv storage directory
+    encoding: text encoding
+
+    Returns path, number of successful writes, number of failed writes,
+    or None, 0, 0 if it fails to open the storage or if sequence is empty
+    """
 
     if not measurements:
-        path = resolve("measurements.csv", Path(data_dir))
-        return path, 0, 0
+        return None, 0, 0
 
+    # assumption: all measurements in a sequence are from the same workload
     filename = repo_to_filename(
         measurements[0].metadata.version.repository, 
         measurements[0].workload.name,

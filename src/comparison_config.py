@@ -5,21 +5,32 @@ from enum import StrEnum
 from pathlib import Path
 import yaml
 
+# list of all suffixes a metric can have
 SUFFIXES = ["_total", "_mean", "_median", "_stddev", "_min", "_max"]
 
 class Direction(StrEnum):
-    HIGHER_BETTER = "higher_better"
-    LOWER_BETTER  = "lower_better"
-    NEUTRAL       = "neutral"
+    HIGHER_BETTER = "higher_better" # higher values mean improvement
+    LOWER_BETTER  = "lower_better"  # lower values mean improvement
+    NEUTRAL       = "neutral"       # metric is not necessarily influenced by value
 
 @dataclass(frozen = True)
 class ThresholdConfig:
-    direction:                 Direction = Direction.NEUTRAL
-    noise_floor_pct:           float     = 0.0
-    improvement_threshold_pct: float     = 0.0
-    regression_threshold_pct:  float     = 0.0
+    """
+    Threshold Config related to a specific metric
+    """
+    direction:                 Direction = Direction.NEUTRAL # improvement direction
+    noise_floor_pct:           float     = 0.0               # noise-floor boundary in percentage (should be a positive number)
+    improvement_threshold_pct: float     = 0.0               # improvement boundary, defines when improvement is reached (depending on direction)
+    regression_threshold_pct:  float     = 0.0               # regression boundary, defines when regression is reached (depending on direction)
 
 def load_thresholds_config(yaml_path: Path | str) -> dict[str, ThresholdConfig]:
+    """
+    Loads the yaml threshold configuration
+
+    yaml_path: path to a yaml configuration
+
+    Returns dictionary of metrics (suffix included) mapped to their threshold configurations
+    """
     with open(yaml_path, "r", encoding = "utf-8") as f:
         raw_data = yaml.safe_load(f) or {}
 
@@ -32,7 +43,7 @@ def load_thresholds_config(yaml_path: Path | str) -> dict[str, ThresholdConfig]:
         try:
             direction = Direction(raw_direction)
         except:
-            direction = Direction.NEUTRAL
+            direction = Direction.NEUTRAL # invalid directions fall back to neutral
 
         config_instance = ThresholdConfig(
             direction                 = direction,

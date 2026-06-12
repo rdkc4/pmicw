@@ -9,6 +9,12 @@ LDRecord:      TypeAlias = Record
 ROCMSMIRecord: TypeAlias = dict
 
 def parse_cpu_prof_output(perf_output: str, pid: int) -> tuple[PerfRecord, LDRecord]:
+    """
+    Parses the output produced by perf (and optionally LD)
+
+    Splits the output into perf records and ld records\n
+    pid is required to capture ld cycles of the process
+    """
     perf_json_records = []
     ld_records        = []
 
@@ -31,6 +37,9 @@ def parse_cpu_prof_output(perf_output: str, pid: int) -> tuple[PerfRecord, LDRec
     return parsed_perf, dynamic_link_cycles
 
 def parse_perf_json_records(perf_json_records: list[dict]) -> PerfRecord:
+    """
+    Extracts event name and counter value from the perf json records
+    """
     metrics: PerfRecord = {}
 
     for record in perf_json_records:
@@ -46,6 +55,9 @@ def parse_perf_json_records(perf_json_records: list[dict]) -> PerfRecord:
     return metrics
 
 def parse_ld_records(ld_records: list[str]) -> LDRecord:
+    """
+    Extracts total startup time in dynamic loader (ld-cycles) from the ld records
+    """
     pattern = re.compile(r"total startup time in dynamic loader:\s*(\d+)\s*cycles")
 
     for record in reversed(ld_records):
@@ -55,6 +67,9 @@ def parse_ld_records(ld_records: list[str]) -> LDRecord:
     return {}
 
 def parse_rocm_smi_output(rocm_smi_output: str, device_index: int) -> ROCMSMIRecord:
+    """
+    Parses rocm-smi output for a specific device
+    """
     json_start = rocm_smi_output.find("{")
 
     if(json_start != -1):

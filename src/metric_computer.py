@@ -15,10 +15,19 @@ from metrics_config import (
 from record_types import FlatRecords, Record, RecordGroup, RecordList
 
 def compute_records(cfg: ProfilerConfig, record_groups: RecordGroup) -> dict[str, Metrics]:
+    """
+    Entry point for record computation
+
+    cfg: metric configuration\n
+    record_groups: grouped records (perf, gpu, memory, thread, ld)
+    """
     flat_metrics = extract_metrics_from_groups(record_groups)
     return compute_metrics(cfg, flat_metrics)
 
-def extract_metrics_from_groups(groups: dict[str, RecordList]) -> FlatRecords:
+def extract_metrics_from_groups(groups: RecordGroup) -> FlatRecords:
+    """
+    Flattens metrics so that metric name and all its values are grouped together
+    """
     extracted_metrics = defaultdict(list)
     
     for item in chain.from_iterable(groups.values()):
@@ -38,6 +47,11 @@ EVAL_BUILTINS: dict = {
 }
 
 def compute_metrics(cfg: ProfilerConfig, flat_records: FlatRecords) -> dict[str, Metrics]:
+    """
+    Entry point for metric computation
+
+    Returns metrics grouped by segments from the metric configuration
+    """
     global_calculation_space: dict[str, float]   = {}
     structured_metrics:       dict[str, Metrics] = OrderedDict()
 
@@ -54,6 +68,12 @@ def compute_segment(
     global_record:  Record, 
     segment_record: Record
 ) -> None:
+    """
+    Evaluates each metric inside of a segment
+
+    Type of evaluation depends on the type of the metric\n
+    Derived metrics must be evaluated last
+    """
     for metric in segment.metrics:
         if isinstance(metric, RatioMetric):
             apply_ratio(metric, flat_records, global_record, segment_record)
@@ -70,6 +90,15 @@ def compute_segment(
 
 
 def apply_ratio(metric: RatioMetric, flat_records: FlatRecords, global_record: Record, segment_record: Record) -> None:
+    """
+    Applies ratio to metrics
+
+    Numerator and Denominator metrics are defined in metric configuration\n
+    Ratio is calculated as numerator / denominator\n
+    Additional option is defining `totals` list in metric configuration\n
+    If numerator and/or denominator are listed in totals their aggregated values will be captured too\n
+    Applies scaling
+    """
     numerators   = flat_records.get(metric.numerator,   [])
     denominators = flat_records.get(metric.denominator, [])
 
@@ -100,6 +129,14 @@ def apply_ratio(metric: RatioMetric, flat_records: FlatRecords, global_record: R
 
 
 def apply_stats(metric: StatsMetric, flat_records: FlatRecords, global_record: Record, segment_record: Record) -> None:
+    """
+    Applies stats to metrics
+
+    Evaluated mean, median, stddev, min, and max values of the metric\n
+    Additional option is `total` in configuration\n
+    If total is set to true aggregated values of metric will be stored too\n
+    Applies scaling
+    """
     values = flat_records.get(metric.key, [])
 
     if metric.scale != 1:
@@ -114,6 +151,11 @@ def apply_stats(metric: StatsMetric, flat_records: FlatRecords, global_record: R
 
 
 def apply_sum(metric: SumMetric, flat_records: FlatRecords, global_record: Record, segment_record: Record) -> None:
+    """
+    Applies sum to a metric
+
+    Applies scaling
+    """
     values = flat_records.get(metric.key, [])
     
     if metric.scale != 1:
@@ -124,6 +166,11 @@ def apply_sum(metric: SumMetric, flat_records: FlatRecords, global_record: Recor
 
 
 def apply_derived(metric: DerivedMetric, global_record: Record, segment_record: Record) -> None:
+    """
+    Evaluates the derived metric based on the `formula` defined in metric configuration
+
+    Applies scaling
+    """
     env = dict(EVAL_BUILTINS)
     env.update(global_record)
 

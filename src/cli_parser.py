@@ -81,6 +81,9 @@ from typing import TypeAlias
 from enum import StrEnum
 
 class MetricOptions(StrEnum):
+    """
+    Metric Option entries for Workload Runner's CLI parser
+    """
     WALL_TIME = 'wall-time'
     CPU       = 'cpu'
     GPU       = 'gpu'
@@ -88,11 +91,17 @@ class MetricOptions(StrEnum):
     THREAD    = 'thread'
 
 class ReportFormatOptions(StrEnum):
+    """
+    Report Format Options for Comparison Tool's CLI parser
+    """
     CSV  = 'csv'
     MD   = 'md'
     JSON = 'json'
 
 class VisualFormatOptions(StrEnum):
+    """
+    Visualization Format Options for Comparison Tool's CLI parser
+    """
     TABLE = 'table'
     CHART = 'chart'
     GRAPH = 'graph'
@@ -102,10 +111,32 @@ ReportFormats:   TypeAlias = list[ReportFormatOptions]
 VisualFormats:   TypeAlias = list[VisualFormatOptions]
 
 def parse_runner_args() -> argparse.Namespace:
+    """
+    Entry point for Workload Runner argument parser
+
+    Creates an instance of a parser and parses arguments received from CLI
+
+    Returns argparse.Namespace containing all arguments passed via CLI
+    """
     parser = create_runner_cli_parser()
     return parser.parse_args()
 
 def create_runner_cli_parser() -> argparse.ArgumentParser:
+    """
+    Creates the instance of the Workload Runner's CLI parser
+
+    Appends Workload Runner's options, workload, and workload args
+    
+    Expected syntax: [options] <workload> [workload-args...]
+
+    All options must be passed before workload,
+    any argument after the workload will be treated as workload argument
+
+    Workload arguments are not handled by Workload Runner parser,
+    they are just passed to workload
+
+    Returns instance of the Workload Runner parser
+    """
     parser = argparse.ArgumentParser(
         'runner-cli-parser',
         usage    = '%(prog)s [options] <workload> [workload-args...]',
@@ -160,19 +191,45 @@ def add_runner_options(parser: argparse.ArgumentParser) -> None:
     )
 
 def parse_metrics(metrics_str: str) -> MetricSelection:
+    """
+    Parses Workload Runner's metric selection
+
+    Throws if any invalid metrics are listed
+
+    Returns list of selected metric options
+    """
     metrics = [metric.strip() for metric in metrics_str.split(',')]
 
     invalid = set(metrics) - set(MetricOptions)
     if invalid:
         raise argparse.ArgumentTypeError(f'invalid metrics: {", ".join(invalid)}')
     
+    # safe to cast since "invalid" will capture all invalid metric entries
     return [MetricOptions(metric) for metric in metrics]
 
 def parse_comparison_args() -> argparse.Namespace:
+    """
+    Entry point for Comparison Tool argument parser
+
+    Creates an instance of a parser and parses arguments received from CLI
+
+    Returns argparse.Namespace containing all arguments passed via CLI
+    """
     parser = create_comparison_cli_parser()
     return parser.parse_args()
 
 def create_comparison_cli_parser() -> argparse.ArgumentParser:
+    """
+    Creates the instance of the Comparison Tool's CLI parser
+
+    Appends Comparison Tool's options
+    
+    Expected syntax: [options]
+
+    `--path` and `--workload-name` options are mandatory
+
+    Returns instance of the Comparison Tool parser
+    """
     parser = argparse.ArgumentParser(
         'comparison-cli-parser',
         usage    = '%(prog)s [options]',
@@ -241,21 +298,37 @@ def add_comparison_options(parser: argparse.ArgumentParser) -> None:
     )
 
 def parse_report_formats(formats_str: str) -> ReportFormats:
+    """
+    Parses Comparison Tool's report format selection
+
+    Throws if any invalid report formats are listed
+
+    Returns list of selected report formats
+    """
     formats = [fmt.strip() for fmt in formats_str.split(',')]
 
     invalid = set(formats) - set(ReportFormatOptions)
     if invalid:
         raise argparse.ArgumentTypeError(f'invalid report formats: {", ".join(sorted(invalid))}')
 
+    # safe to cast since "invalid" will capture all invalid metric entries
     return [ReportFormatOptions(fmt) for fmt in formats]
 
 def parse_visual_formats(formats_str: str) -> VisualFormats:
+    """
+    Parses Comparison Tool's visual format selection
+
+    Throws if any invalid visual formats are listed
+
+    Returns list of selected visual formats
+    """
     formats = [fmt.strip() for fmt in formats_str.split(',')]
 
     invalid = set(formats) - set(VisualFormatOptions)
     if invalid:
         raise argparse.ArgumentTypeError(f'invalid visual formats: {", ".join(sorted(invalid))}')
 
+    # safe to cast since "invalid" will capture all invalid metric entries
     return [VisualFormatOptions(fmt) for fmt in formats]
 
 def parse_positive_int(value: str) -> int:

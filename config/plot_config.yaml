@@ -1,3 +1,15 @@
+# Plot Groups define which metrics should be visualized together
+#
+# each plot group is declared with a name (e.g. `performance`) must be unique, repeated name will be overwritten
+# each plot group has a list of metrics
+# metric can be defined in two ways:
+#  - by setting name as full metric name (e.g. wall_time_ms_mean) and ignoring the suffix
+#  - by setting the name as base metric name (e.g. wall_time_ms) and adding the suffix (e.g. mean)
+#
+# Metrics that can't be resolved will not be displayed
+#
+# Number of defined metrics per group could affect the readability of the visualization
+#
 plot_groups:
   performance:
     metrics:
