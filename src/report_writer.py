@@ -17,6 +17,17 @@ MD_REPORT_ROW_COLORS = {
 }
 
 def write_report(df: pd.DataFrame, report_formats: list[ReportFormatOptions], workload_name: str) -> ComparisonReports:
+    """
+    Entry point for report writing
+
+    df: comparison data\n
+    report_formats: selected report formats\n
+    workload_name: name of the workload that is being reported
+
+    All rows and metrics are reported
+
+    Returns paths to comparison reports
+    """
     reports     = ComparisonReports()
     report_data = {ComparisonCols.COMPARISON: []}
     grouped     = df.groupby(["baseline_run_id", "contender_run_id"], sort = False)
@@ -64,6 +75,9 @@ def write_json_report(report_data: dict, output_path: Path) -> None:
         json.dump(report_data, f, indent = 2, default = str)
 
 def write_md_report(report_data: dict, output_path: Path) -> None:
+    """
+    Writes a markdown report with rows inlined as HTML
+    """
     lines = []
     for comparison in report_data[ComparisonCols.COMPARISON]:
         lines.append("## Report:")
