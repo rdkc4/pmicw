@@ -1,3 +1,39 @@
+# Automated CI Pipeline
+#
+# Triggers on:
+# - push (data, reports, visual and worklods paths are ignored to prevent infinite CI)
+# - pull requests
+# - manual dispatch
+#
+# Workloads reside in `workloads/` directory, 
+# after adding workload it can be enlisted to workflow_dispatch options for manual dispatching
+#
+# Manual Dispatching:
+# - open repository
+# - go to `Actions` tab
+# - on the left, click on the `Benchmark Pipeline`
+# - on the right, click on the `Run Workflow` button that appeared
+# - choose main branch
+# - choose which workload should run
+# - click on `Run Workflow`
+#
+# Jobs:
+# - Benchmark
+#   - Performs repository checkout
+#   - Tries to restore previously published gh-pages data
+#   - Sets up the environment
+#   - Determines which workload to run
+#   - Runs the full measurement pipeline by calling the run.sh script
+#   - Commits the newly gathered data
+#   - Uploads artifacts to be visible for deploy job
+#   - note: benchmark is self-hosted, actions-runner must be set up locally
+#
+# - Deploy
+#   - Downloads artifacts uploaded by benchmark
+#   - Merges restored data with newly generated data
+#   - Deploys data to gh-pages branch
+#
+
 name: Benchmark Pipeline
  
 on:
