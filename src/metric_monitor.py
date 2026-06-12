@@ -13,6 +13,10 @@ from workload_context import WorkloadContext
 
 @dataclass
 class MonitorSpecification:
+    """
+    Specifies the target of the monitor,
+    and if monitor requires a process id to sample data
+    """
     target:    Callable
     needs_pid: bool
 
@@ -23,7 +27,15 @@ def get_monitors() -> dict[Segments, MonitorSpecification]:
         Segments.GPU:    MonitorSpecification(target = monitor_amd_gpu,         needs_pid = False)
     }
 
-def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig):
+def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig) -> None:
+    """
+    Entry point for monitoring
+
+    ctx: context of the workload\n
+    cfg: metric configuration
+
+    Starts monitors of the selected segments (memory, thread, gpu)
+    """
     monitors = get_monitors()
 
     for segment, monitor in monitors.items():
@@ -57,6 +69,13 @@ def spawn_monitor_daemon(
     args:    tuple,
     daemons: list[threading.Thread]
 ) -> None:
+    """
+    Spawns monitor daemon thread
+
+    target: monitoring target\n
+    args: arguments for the target\n
+    daemons: reference to a list of all daemons
+    """
     daemon = threading.Thread(
         target = target,
         args   = args,
@@ -74,7 +93,18 @@ def monitor_process_threads(
     interval:       float,
     active_pid_ref: list[int],
 ) -> None:
+    """
+    Monitors threads of the process
 
+    Starts sampling when activity_event is set\n
+    Stops sampling when activity_event is cleared\n
+    Stops monitoring when shutdown_event is set
+
+    Events that are monitored are captured from segment configuration\n
+    Requires reference to a process id to sample its data
+
+    Note: can sample only fields defined by psutil.Process
+    """
     events = segment_config.read_keys_for_target(psutil.Process)
     if not events:
         return
@@ -112,6 +142,18 @@ def monitor_process_memory(
     interval:       float,
     active_pid_ref: list[int]
 ) -> None:
+    """
+    Monitors memory of the process
+
+    Starts sampling when activity_event is set\n
+    Stops sampling when activity_event is cleared\n
+    Stops monitoring when shutdown_event is set
+
+    Events that are monitored are captured from segment configuration\n
+    Requires reference to a process id to sample its data
+
+    Note: can sample only fields defined by psutil._ntp.pfullmem
+    """
     
     events = segment_config.read_keys_for_target(psutil._ntp.pfullmem)
     if not events:
@@ -149,6 +191,17 @@ def monitor_amd_gpu(
     interval:       float, 
     device_index:   int = 0
 ) -> None:
+    """
+    Monitors gpu during the execution of the process
+
+    Starts sampling when activity_event is set\n
+    Stops sampling when activity_event is cleared\n
+    Stops monitoring when shutdown_event is set
+
+    Events that are monitored are captured from segment configuration\n
+
+    Note: can sample only fields available from rocm-smi
+    """
     
     events = segment_config.read_keys()
     if not events:
@@ -216,7 +269,7 @@ def gpu_exists(device_index: int) -> bool:
 
     finally:
         try:
-            amdsmi.amdsmi_shut_down()
+            amdsmi.amdsmi_shut_down() # type: ignore
         except:
             return False
     
