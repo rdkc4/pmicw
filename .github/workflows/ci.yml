@@ -1,5 +1,5 @@
 name: Benchmark Pipeline
-
+ 
 on:
   push:
     paths-ignore:
@@ -7,67 +7,157 @@ on:
       - 'web/reports/**'
       - 'web/visual/**'
       - 'web/workloads/**'
+ 
   pull_request:
-
+ 
+  workflow_dispatch:
+    inputs:
+      workload:
+        description: Workload to benchmark
+        required: true
+        default: test.py
+        type: choice
+        options:
+          - test.py
+          - test2.py
+          - test3.py
+ 
 permissions:
   contents: write
-  pages: write
-  id-token: write
-
+ 
 jobs:
   benchmark:
     runs-on: self-hosted
-
+ 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
+ 
+      - name: Restore existing published site
+        if: github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+ 
+          if git ls-remote --exit-code origin gh-pages >/dev/null 2>&1; then
+            git clone \
+              --depth 1 \
+              --branch gh-pages \
+              "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+              .gh-pages
+ 
+            mkdir -p web/workloads
+            mkdir -p web/reports
+ 
+            cp -a .gh-pages/workloads/. web/workloads/ 2>/dev/null || true
+            cp -a .gh-pages/reports/. web/reports/ 2>/dev/null || true
+          fi
+ 
       - name: Setup Environment
         run: |
           ./setup.sh
-
+ 
+      - name: Select workload
+        id: workload
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "file=${{ github.event.inputs.workload }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "file=test.py" >> "$GITHUB_OUTPUT"
+          fi
+ 
       - name: Run workload benchmark
         run: |
           export PATH="$GITHUB_WORKSPACE/.venv/bin:$PATH"
-
+ 
           ./run.sh \
             -m cpu,memory,thread,gpu \
-            -it 5 -wit 3 \
+            -it 5 \
+            -wit 3 \
             -cmp 10 \
             -rfmt json,md,csv \
             -vfmt table,chart,graph \
-            ./workloads/test.py
-
-      - name: Commit benchmark results
+            "./workloads/${{ steps.workload.outputs.file }}"
+ 
+      - name: Commit benchmark data
         if: github.ref == 'refs/heads/main'
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+ 
           git add web/data/
-          git diff --cached --quiet || git commit -m "Update benchmark results [skip ci]"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ 
+          if ! git diff --cached --quiet; then
+            git commit -m "Update benchmark results [skip ci]"
+            git push
+          fi
 
-      - name: Verify Pages Content
-        run: |
-          ls -R web
-
-      - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload artifacts for deploy
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
         with:
-          path: web
+          name: benchmark-site
+          path: web/
 
   deploy:
-    if: github.ref == 'refs/heads/main'
-    needs: benchmark
     runs-on: ubuntu-latest
-
-    environment:
-      name: github-pages
+    needs: benchmark
+    if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
+      - name: Download benchmark artifacts
+        uses: actions/download-artifact@v3
+        with: 
+          name: benchmark-site
+          path: site
+
+      - name: Deploy site to gh-pages
+        if: github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          WORKDIR="$(mktemp -d)"
+
+          if git ls-remote --exit-code origin gh-pages >/dev/null 2>&1; then
+            git clone \
+              --depth 1 \
+              --branch gh-pages \
+              "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+              "$WORKDIR"
+          else
+            git init "$WORKDIR"
+            cd "$WORKDIR"
+            git checkout -b gh-pages
+            git remote add origin \
+              "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+            cd "$GITHUB_WORKSPACE"
+          fi
+
+          mkdir -p "$WORKDIR/workloads"
+          mkdir -p "$WORKDIR/reports"
+
+          cp site/web/index.html "$WORKDIR/index.html"
+
+          rsync -av site/web/workloads/ "$WORKDIR/workloads/"
+          rsync -av site/web/reports/ "$WORKDIR/reports/"
+
+          touch "$WORKDIR/.nojekyll"
+
+          cd "$WORKDIR"
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add .
+
+          if ! git diff --cached --quiet; then
+            git commit -m "Deploy benchmark site"
+            git push origin HEAD:gh-pages
+          else
+            echo "No site changes to deploy"
+          fi
