@@ -99,17 +99,17 @@ def report(cmp_dfs: ComparisonDataFrames, args: argparse.Namespace) -> Compariso
     report_groups = ComparisonReportGroups()
 
     if cmp_dfs.cmp_df is not None and not cmp_dfs.cmp_df.empty:
-        report_groups.cmp = write_report(cmp_dfs.cmp_df, args.report_format, args.workload_name)
+        report_groups.cmp = write_report(cmp_dfs.cmp_df, args.report_format, args.workload_name, "cmp")
     elif args.compare:
         print(f"Failed to write report for cmp", file = sys.stderr)
 
     if cmp_dfs.cmpw_df is not None and not cmp_dfs.cmpw_df.empty:
-        report_groups.cmpw = write_report(cmp_dfs.cmpw_df, args.report_format, args.workload_name)
+        report_groups.cmpw = write_report(cmp_dfs.cmpw_df, args.report_format, args.workload_name, "cmpw")
     elif args.compare_with:
         print(f"Failed to write report for cmpw", file = sys.stderr)
 
     if cmp_dfs.cmp2_df is not None and not cmp_dfs.cmp2_df.empty:
-        report_groups.cmp2 = write_report(cmp_dfs.cmp2_df, args.report_format, args.workload_name)
+        report_groups.cmp2 = write_report(cmp_dfs.cmp2_df, args.report_format, args.workload_name, "cmp2")
     elif args.compare_two:
         print(f"Failed to write report for cmp2", file = sys.stderr)
 

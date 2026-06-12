@@ -16,13 +16,14 @@ MD_REPORT_ROW_COLORS = {
     MetricStatus.IRRELEVANT:  "background-color: transparent; color: #555555;"
 }
 
-def write_report(df: pd.DataFrame, report_formats: list[ReportFormatOptions], workload_name: str) -> ComparisonReports:
+def write_report(df: pd.DataFrame, report_formats: list[ReportFormatOptions], workload_name: str, comparison_type: str) -> ComparisonReports:
     """
     Entry point for report writing
 
     df: comparison data\n
     report_formats: selected report formats\n
-    workload_name: name of the workload that is being reported
+    workload_name: name of the workload that is being reported\n
+    comparison_type: cmp/cmpw/cmp2
 
     All rows and metrics are reported
 
@@ -50,17 +51,17 @@ def write_report(df: pd.DataFrame, report_formats: list[ReportFormatOptions], wo
     REPORT_DIR.mkdir(parents = True, exist_ok = True)
 
     if ReportFormatOptions.CSV in report_formats:
-        path        = generate_report_path(f"{normalize_name(workload_name)}_report_csv", ReportFormatOptions.CSV)
+        path        = generate_report_path(f"{normalize_name(workload_name)}_{comparison_type}_report_csv", ReportFormatOptions.CSV)
         reports.csv = str(path)
         write_csv_report(df, path)
 
     if ReportFormatOptions.JSON in report_formats:
-        path         = generate_report_path(f"{normalize_name(workload_name)}_report_json", ReportFormatOptions.JSON)
+        path         = generate_report_path(f"{normalize_name(workload_name)}_{comparison_type}_report_json", ReportFormatOptions.JSON)
         reports.json = str(path)
         write_json_report(report_data, path)
 
     if ReportFormatOptions.MD in report_formats:
-        path       = generate_report_path(f"{normalize_name(workload_name)}_report_md", ReportFormatOptions.MD)
+        path       = generate_report_path(f"{normalize_name(workload_name)}_{comparison_type}_report_md", ReportFormatOptions.MD)
         reports.md = str(path)
         write_md_report(report_data, path)
 
