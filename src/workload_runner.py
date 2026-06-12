@@ -51,6 +51,12 @@ from workload_context import WorkloadContext, WorkloadMetricSelection, WorkloadM
 
 @dataclass
 class RunnerResult:
+    """
+    Result of workload execution containing:\n
+    id of the executed run, name of the executed workload, and csv path to its storage
+
+    This format is required by run.sh script, these results are passed to comparison tool
+    """
     run_id:        str
     workload_name: str
     csv_path:      str
@@ -59,10 +65,22 @@ class RunnerResult:
         return json.dumps(asdict(self))
 
 def run_workload(ctx: WorkloadContext, cfg: ProfilerConfig) -> dict[str, Metrics]:
+    """
+    Entry point for workload execution
+
+    ctx: context of the workload\n
+    cfg: metric configuration
+
+    Spawns daemon monitor threads and executes workload\n
+    If perf event groups are defined, each group will run for number of iterations set by CLI
+
+    Returns dict that maps segment name to its metrics
+    """
     perf_event_groups = get_perf_groups(cfg, ctx.selected_metrics.cpu, ctx.env)
     
     start_monitoring(ctx, cfg)
     try:
+        # preventing cold runs to affect statistics (optional)
         warmup_workload(ctx.command, ctx.warmup_iterations)
 
         if perf_event_groups:
@@ -89,6 +107,13 @@ def execute_workload(
     ctx:     WorkloadContext,
     env:     dict[str, str] | None = None
 ) -> None:
+    """
+    Executes the workload command
+
+    Measures the wall time\n
+    Notifies monitors when to start/stop\n
+    Parses perf/ld records if defined
+    """
     for _ in range(ctx.iterations):
         start = time.perf_counter()
 
@@ -121,6 +146,10 @@ def execute_workload(
 
     
 def get_perf_groups(cfg: ProfilerConfig, cpu_selected: bool, base_env: dict[str, str]) -> list[PerfGroupConfig]:
+    """
+    Loads perf group configurations\n
+    Appends env for LD_DEBUG and LD_BIND_NOW if group uses ld
+    """
     if not cpu_selected or Segments.CPU not in cfg.segments:
         return []
     
@@ -145,6 +174,11 @@ def get_perf_groups(cfg: ProfilerConfig, cpu_selected: bool, base_env: dict[str,
     return active_groups
 
 def setup_workload_context(args: argparse.Namespace):
+    """
+    Defines selected metrics\n
+    Defines monitor data\n
+    Loads workload context from CLI
+    """
     env = os.environ.copy()
 
     metrics = WorkloadMetricSelection(
@@ -175,7 +209,7 @@ def setup_workload_context(args: argparse.Namespace):
 
 def assemble_workload(args: argparse.Namespace) -> Workload:
     return Workload(
-        name              = args.workload.split('/')[-1],
+        name              = args.workload.split('/')[-1], # workload name is the file name, previous path is ignored
         iterations        = args.iteration,
         warmup_iterations = args.warmup_iteration,
         arguments         = args.workload_args or []
