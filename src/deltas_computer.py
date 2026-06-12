@@ -17,6 +17,15 @@ def classify_metric(
     delta_pct:      float,
     comparison_cfg: ThresholdConfig
 ) -> MetricStatus:
+    """
+    Classifies metric status based on the absolute delta and delta percentage
+
+    baseline_val: value of the baseline metric\n
+    contender_val: value of the contender metric\n
+    delta_abs: absolute difference between baseline and contender value\n
+    delta_pct: difference between baseline and contender values as a percentage\n
+    comparison_cfg: configuration defining the thresholds of the metric
+    """
 
     if any(pd.isna([baseline_val, contender_val, delta_abs, delta_pct])) or np.isinf(delta_abs) or np.isinf(delta_pct):
         return MetricStatus.INVALID
@@ -41,6 +50,19 @@ def classify_metric(
     return MetricStatus.INTERESTING
 
 def compute_deltas(df: pd.DataFrame, contender_id: str, comparison_map: dict[str, ThresholdConfig]) -> pd.DataFrame:
+    """
+    Entry point for delta computation
+
+    df: dataframe with loaded csv data\n
+    contender_id: id of the contender run\n
+    comparison_map: configuration defining the thresholds of all metrics
+
+    Absolute delta is calculated as: contender_value - baseline_value\n
+    Percentage delta is calculated as: (absolute_delta / baseline_value) * 100
+
+    Resulting data frame format:\n
+    workload_name|baseline_run_id|baseline_args|contender_run_id|contender_args|timestamp|metric|delta_abs|delta_pct|baseline_val|contender_val|status
+    """
     if df.empty:
         return pd.DataFrame()
 
