@@ -41,10 +41,11 @@ import time
 import os
 
 from cli_parser import parse_runner_args
+from command_config import CommandConfig, load_command_config
 from measurement import Measurement, Metadata, Metrics, Workload
 from metric_computer import compute_records
 from metric_monitor import start_monitoring
-from metrics_config import PerfGroupConfig, ProfilerConfig, Segments, load_config
+from metric_config import PerfGroupConfig, ProfilerConfig, Segments, load_config
 from record_parser import parse_cpu_prof_output
 from csv_writer import write
 from workload_context import WorkloadContext, WorkloadMetricSelection, WorkloadMonitors
@@ -64,7 +65,7 @@ class RunnerResult:
     def to_json(self):
         return json.dumps(asdict(self))
 
-def run_workload(ctx: WorkloadContext, cfg: ProfilerConfig) -> dict[str, Metrics]:
+def run_workload(ctx: WorkloadContext, cfg: ProfilerConfig, cmd_cfg: CommandConfig) -> dict[str, Metrics]:
     """
     Entry point for workload execution
 
@@ -76,16 +77,16 @@ def run_workload(ctx: WorkloadContext, cfg: ProfilerConfig) -> dict[str, Metrics
 
     Returns dict that maps segment name to its metrics
     """
-    perf_event_groups = get_perf_groups(cfg, ctx.selected_metrics.cpu, ctx.env)
+    perf_event_groups = get_perf_groups(cfg, cmd_cfg.ld_environment, ctx.selected_metrics.cpu, ctx.env)
     
-    start_monitoring(ctx, cfg)
+    start_monitoring(ctx, cfg, cmd_cfg.rocm_smi)
     try:
         # preventing cold runs to affect statistics (optional)
         warmup_workload(ctx.command, ctx.warmup_iterations)
 
         if perf_event_groups:
             for event_group in perf_event_groups:
-                command = ["perf", "stat", "-j", "-e", f"{{{",".join(event_group.events)}}}"] + ctx.command
+                command = list(cmd_cfg.perf.base_command) + [f"{{{",".join(event_group.events)}}}"] + ctx.command
                 execute_workload(command, ctx, event_group.env)
 
         else:
@@ -145,10 +146,10 @@ def execute_workload(
             ctx.records[Segments.LD].append(link_record)
 
     
-def get_perf_groups(cfg: ProfilerConfig, cpu_selected: bool, base_env: dict[str, str]) -> list[PerfGroupConfig]:
+def get_perf_groups(cfg: ProfilerConfig, ld_env: dict, cpu_selected: bool, base_env: dict[str, str]) -> list[PerfGroupConfig]:
     """
     Loads perf group configurations\n
-    Appends env for LD_DEBUG and LD_BIND_NOW if group uses ld
+    Appends env for LD Environment if group uses ld
     """
     if not cpu_selected or Segments.CPU not in cfg.segments:
         return []
@@ -159,9 +160,9 @@ def get_perf_groups(cfg: ProfilerConfig, cpu_selected: bool, base_env: dict[str,
     for group in cpu_segment.perf_groups:
         group_env = None
         if group.use_ld_env:
-            group_env                = base_env.copy()
-            group_env["LD_DEBUG"]    = "statistics"
-            group_env["LD_BIND_NOW"] = "1"
+            group_env = base_env.copy()
+            for env_key, env_val in ld_env.items():
+                group_env[env_key] = env_val
         
         active_groups.append(
             PerfGroupConfig(
@@ -225,12 +226,13 @@ def assemble_measurement(workload: Workload, metrics: dict[str, Metrics], cfg: P
 
 def main():
     args     = parse_runner_args()
-    cfg      = load_config("config/metrics_config.yaml")
+    cfg      = load_config("config/metric_config.yaml")
+    cmd_cfg  = load_command_config("config/command_config.yaml")
     ctx      = setup_workload_context(args)
     workload = assemble_workload(args)
 
     try:
-        metrics = run_workload(ctx, cfg)
+        metrics = run_workload(ctx, cfg, cmd_cfg)
 
     except RuntimeError as e:
         print(f"Error: {e}", file = sys.stderr)

@@ -6,7 +6,8 @@ import time
 from typing import Callable
 import psutil
 
-from metrics_config import ProfilerConfig, SegmentConfig, Segments
+from command_config import RocmSMICommandConfig
+from metric_config import ProfilerConfig, SegmentConfig, Segments
 from record_parser import parse_rocm_smi_output
 from record_types import Record, RecordList
 from workload_context import WorkloadContext
@@ -27,12 +28,13 @@ def get_monitors() -> dict[Segments, MonitorSpecification]:
         Segments.GPU:    MonitorSpecification(target = monitor_amd_gpu,         needs_pid = False)
     }
 
-def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig) -> None:
+def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig, cmd_cfg: RocmSMICommandConfig) -> None:
     """
     Entry point for monitoring
 
-    ctx: context of the workload\n
-    cfg: metric configuration
+    ctx:     context of the workload\n
+    cfg:     metric configuration
+    cmd_cfg: command configuration (for rocm-smi)
 
     Starts monitors of the selected segments (memory, thread, gpu)
     """
@@ -54,6 +56,9 @@ def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig) -> None:
             cfg_segment,
             ctx.monitors.interval,
         ]
+
+        if segment == Segments.GPU:
+            args.append(cmd_cfg)
 
         if monitor.needs_pid:
             args.append(ctx.monitors.active_pid)
@@ -189,7 +194,7 @@ def monitor_amd_gpu(
     gpu_records:    RecordList,
     segment_config: SegmentConfig,
     interval:       float, 
-    device_index:   int = 0
+    cfg:            RocmSMICommandConfig
 ) -> None:
     """
     Monitors gpu during the execution of the process
@@ -207,15 +212,10 @@ def monitor_amd_gpu(
     if not events:
         return
 
-    if not gpu_exists(device_index):
+    if not gpu_exists(cfg.device_index):
         return
 
-    command = [
-        "rocm-smi", 
-        "--showuse", "--showmemuse", 
-        f"--device={device_index}", 
-        "--json"
-    ]
+    command = list(cfg.base_command) + [f"{cfg.device_flag}{cfg.device_index}"]
 
     while not shutdown_event.is_set():
         activity_event.wait()
@@ -231,7 +231,7 @@ def monitor_amd_gpu(
                     check          = True
                 )
 
-                record = sample_values(parse_rocm_smi_output(rocm_smi_result.stdout.strip(), device_index), events)
+                record = sample_values(parse_rocm_smi_output(rocm_smi_result.stdout.strip(), cfg.device_index), events)
                 if record:
                     gpu_records.append(record)
 

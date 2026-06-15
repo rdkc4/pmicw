@@ -66,7 +66,7 @@ import psutil
 import cpuinfo
 import git
 
-from metrics_config import ProfilerConfig
+from metric_config import ProfilerConfig
 from record_types import Record
 
 class Version:

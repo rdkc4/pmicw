@@ -1,0 +1,25 @@
+# Defines commands used by rocm-smi and perf
+# Defines env variables required by ld
+# Do not remove `-j` flag from perf's base command
+# Do not remove `--json` flag from rocm-smi's base command
+
+commands:
+  rocm_smi:
+    base_command:
+      - "rocm-smi"
+      - "--showuse"
+      - "--showmemuse"
+      - "--json"
+    device_flag: "--device="
+    device_index: 0
+
+  perf:
+    base_command:
+      - "perf"
+      - "stat"
+      - "-j"
+      - "-e"
+
+  ld_environment:
+    LD_DEBUG: "statistics"
+    LD_BIND_NOW: "1"
