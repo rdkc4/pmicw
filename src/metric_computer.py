@@ -2,7 +2,7 @@ from measurement import Metrics
 from itertools import chain
 from statistics import mean, median, stdev
 from collections import OrderedDict, defaultdict
-from metrics_config import (
+from metric_config import (
     STATS_SUFFIX,
     DerivedMetric, 
     ProfilerConfig, 
