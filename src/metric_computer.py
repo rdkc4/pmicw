@@ -29,11 +29,21 @@ def extract_metrics_from_groups(groups: RecordGroup) -> FlatRecords:
     Flattens metrics so that metric name and all its values are grouped together
     """
     extracted_metrics = defaultdict(list)
+
+    # Tracks metrics outputted separately (cpu_atom/ and cpu_core/ versions) by perf for hybrid cpus (e.g. instrucitons, cache-misses, etc.)
+    hybrid_metrics = set()
     
     for item in chain.from_iterable(groups.values()):
         for metric_name, value in item.items():
-            if value is not None:
-                extracted_metrics[metric_name.split(':')[0]].append(value)
+            if value is not None:  
+                processed_name = metric_name.split(':')[0].rstrip('/').split('/')[-1]
+                if metric_name.endswith('/'):
+                    hybrid_metrics.add(processed_name)
+                extracted_metrics[processed_name].append(value)
+
+    # Sums hybrid metrics pairwise to produce a single value per iteration
+    for name in hybrid_metrics:
+         extracted_metrics[name] = list(map(sum, zip(*[iter(extracted_metrics[name])]*2)))
     
     return dict(extracted_metrics)
 
