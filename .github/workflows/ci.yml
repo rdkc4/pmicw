@@ -57,6 +57,8 @@ on:
           - test.py
           - test2.py
           - test3.py
+          - test4.py
+          - test5triton.py
  
 permissions:
   contents: write
