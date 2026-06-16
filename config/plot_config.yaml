@@ -11,33 +11,39 @@
 # Number of defined metrics per group could affect the readability of the visualization
 #
 plot_groups:
-  performance:
+  efficiency:
+    metrics:
+      - name: ipc
+        suffix: mean
+      - name: ipc
+        suffix: median
+      - name: ipc
+        suffix: max
+      - name: ipc
+        suffix: min
+
+  execution:
     metrics:
       - name: wall_time_ms
         suffix: mean
       - name: task_clock_ms
         suffix: mean
+      - name: startup_time_ms
+
+  thread:
+    metrics:
+      - name: thread_count
+        suffix: mean
+      - name: thread_utilization_pct
 
   memory:
     metrics:
       - name: rss_mb
         suffix: mean
+      - name: rss_mb
+        suffix: max
       - name: vms_mb
         suffix: mean
-
-  gpu:
-    metrics:
-      - name: gpu_activity_pct
-        suffix: mean
-      - name: gpu_vram_pct
-        suffix: mean
-
-  thread:
-    metrics:
-      - name: thread_utilization_pct
-
-  startup:
-    metrics:
-      - name: wall_time_ms
-        suffix: mean
-      - name: startup_time_ms
+      - name: vms_mb
+        suffix: max
+      
