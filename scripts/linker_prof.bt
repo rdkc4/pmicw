@@ -1,0 +1,118 @@
+#!/usr/bin/env bpftrace
+
+/* 
+ * Kernel execution phase
+ *
+ * t_exec:
+ *   Timestamp when execve syscall begins.
+ *
+ * kernel:
+ *   Total time spent inside kernel preparing process execution:
+ *   ELF loading, interpreter setup, memory mapping, etc.
+*/
+tracepoint:syscalls:sys_enter_execve
+/pid == cpid/
+{
+    @t_exec[pid] = nsecs;
+}
+
+/* 
+ * Transition into user space
+ *
+ * Marks the moment kernel hands control to ld.so.
+ *
+ * kernel:
+ *   Final kernel-side startup duration.
+ *
+ * t_map_start:
+ *   Start of dynamic linker mapping phase (ld.so execution begins).
+*/
+tracepoint:syscalls:sys_exit_execve
+/pid == cpid/
+{
+    $now = nsecs;
+    if (@t_exec[pid]) {
+        @kernel[pid] = $now - @t_exec[pid];
+    }
+    @t_map_start[pid] = $now;
+}
+
+/* 
+ * Mapping => relocation boundary
+ *
+ * Heuristic based on first mprotect() call during startup.
+ *
+ * map_duration:
+ *   Time from ld.so start until memory protection stabilizes.
+ *
+ * t_reloc_start:
+ *   Approximate beginning of relocation processing phase.
+*/
+tracepoint:syscalls:sys_enter_mprotect
+/pid == cpid/
+{
+    $now = nsecs;
+    if (@t_map_start[pid] && !@t_reloc_start[pid]) {
+        @map_duration[pid] = $now - @t_map_start[pid];
+        @t_reloc_start[pid] = $now;
+    }
+}
+
+/*
+ * Startup completion boundary
+ *
+ * Triggered when libc initialization completes and control
+ * is passed to __libc_start_main().
+ *
+ * reloc:
+ *   Time spent after relocation begins until program entry.
+ *
+ * total:
+ *   Full measured startup lifecycle from execve → main().
+*/
+uprobe:/lib/x86_64-linux-gnu/libc.so.6:__libc_start_main
+/pid == cpid/
+{
+    $now = nsecs;
+
+    $kernel = @kernel[pid];
+    $map    = @map_duration[pid];
+    $reloc  = 0;
+    
+    if (@t_reloc_start[pid]) {
+        $reloc = $now - @t_reloc_start[pid];
+    }
+    
+    $total = $now - @t_exec[pid];
+
+    printf("{\"pid\": %d, \"kernel_time_ns\": %d, \"map_time_ns\": %d, \"reloc_time_ns\": %d, \"startup_time_ns\": %d}",
+        pid,
+        $kernel,
+        $map,
+        $reloc,
+        $total
+    );
+
+    /*
+     * Force termination of workload immediately after measurement.
+     * This ensures deterministic startup timing and avoids noise
+     * from post-start application execution.
+    */
+    signal(9);
+
+    /* cleanup */
+    delete(@t_exec[pid]);
+    delete(@kernel[pid]);
+    delete(@t_map_start[pid]);
+    delete(@map_duration[pid]);
+    delete(@t_reloc_start[pid]);
+}
+
+END
+{
+    clear(@t_exec);
+    clear(@kernel);
+    clear(@t_map_start);
+    clear(@map_duration);
+    clear(@t_reloc_start);
+}
