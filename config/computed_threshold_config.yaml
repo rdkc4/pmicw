@@ -1,0 +1,38 @@
+thresholds:
+  branch_miss_rate_pct:
+    computed_noise_floor: 0.00025850387207081507
+  context_switches:
+    computed_noise_floor: 516.1043176206402
+  gpu_activity_pct:
+    computed_noise_floor: 0.0
+  gpu_vram_pct:
+    computed_noise_floor: 0.0
+  ipc:
+    computed_noise_floor: 0.14878377513171354
+  l1d_miss_rate_pct:
+    computed_noise_floor: 0.0
+  l1i_miss_rate_pct:
+    computed_noise_floor: 0.0
+  l2_miss_rate_pct:
+    computed_noise_floor: 0.009538133881765574
+  llc_miss_rate_pct:
+    computed_noise_floor: 0.03152020584745741
+  major_faults:
+    computed_noise_floor: 0.0
+  minor_faults:
+    computed_noise_floor: 1592.5782032080351
+  page_faults:
+    computed_noise_floor: 1591.1047524702242
+  rss_mb:
+    computed_noise_floor: 73.13301269442492
+  task_clock_ms:
+    computed_noise_floor: 643.7114341290502
+  thread_count:
+    computed_noise_floor: 6.27748664654159
+  vms_mb:
+    computed_noise_floor: 381.4422679938072
+  wall_time_ms:
+    computed_noise_floor: 485.2881264354153
+workload:
+  iterations: 4
+  name: test.py
