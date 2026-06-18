@@ -5,14 +5,16 @@ show_help() {
     echo "Usage: $0 [options] <workload> [workload-args...]"
     echo ""
     echo "[options]:"
-    echo "  -m,    --metric <m>           Gathered metrics (cpu,gpu,memory,thread)"
-    echo "  -it,   --iteration <n>        Number of iterations for workload to run"
-    echo "  -wit,  --warmup-iteration     Number of warmup iterations for workload to run"
-    echo "  -cmp,  --compare <n>          Compare with last 'n' runs"
-    echo "  -cmp2, --compare-two <a> <b>  Compare two explicit run IDs"
-    echo "  -cmpw, --compare-with <id>    Compare current run against a specific baseline ID"
-    echo "  -rfmt, --report-format <f>    Format for analysis output (csv,json,md)"
-    echo "  -vfmt, --visual-format <v>    Visualization type (table,chart,graph)"
+    echo "  -m,    --metric <m>                     Gathered metrics (cpu,gpu,memory,thread)"
+    echo "  -it,   --iteration <n>                  Number of iterations for workload to run"
+    echo "  -wit,  --warmup-iteration               Number of warmup iterations for workload to run"
+    echo "  -ct,   --compute-thresholds <n>         Compute thresholds based on workload, using 'n' as z-score"
+    echo "  -cmp,  --compare <n>                    Compare with last 'n' runs"
+    echo "  -cmp2, --compare-two <a> <b>            Compare two explicit run IDs"
+    echo "  -cmpw, --compare-with <id>              Compare current run against a specific baseline ID"
+    echo "  -uct,  --use-computed-thresholds <path> Use computed thresholds in comparisons, path optional"
+    echo "  -rfmt, --report-format <f>              Format for analysis output (csv,json,md)"
+    echo "  -vfmt, --visual-format <v>              Visualization type (table,chart,graph)"
     echo ""
     exit 0
 }
@@ -137,6 +139,14 @@ while [[ $# -gt 0 ]]; do
             if [[ -z "${2:-}" ]] || [[ "$2" =~ ^- ]]; then
                 echo "Error: Option $1 requires a target run ID string." >&2
                 show_help
+            fi
+            COMPARISON_COMMAND+=("$1" "$2")
+            shift 2
+            ;;
+        -uct|--use-computed-thresholds)
+            if [[ -z "${2:-}" ]] || [[ "$2" =~ ^- ]]; then
+                COMPARISON_COMMAND+=("$1")
+                shift 1
             fi
             COMPARISON_COMMAND+=("$1" "$2")
             shift 2

@@ -54,7 +54,7 @@ class ComparisonDataFrames:
     """
     cmp_df:  pd.DataFrame | None = None # result of compare <n>,         None if `-cmp` is not defined 
     cmp2_df: pd.DataFrame | None = None # result of compare-two <a> <b>, None if `-cmp2` is not defined
-    cmpw_df: pd.DataFrame | None = None # result of compare-with <a>,    None if `-cmpw` is not defined
+    cmpw_df: pd.DataFrame | None = None # result of compare-with <id>,    None if `-cmpw` is not defined
 
 @dataclass
 class ComparisonReports:

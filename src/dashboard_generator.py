@@ -78,7 +78,7 @@ def generate_dashboard(
     cmp_sections = [
         ("cmp",  report_groups.cmp,  visual_groups.cmp),
         ("cmp2", report_groups.cmp2, visual_groups.cmp2),
-        ("cmpw", report_groups.cmpw, visual_groups.cmpw)
+        ("cmpw", report_groups.cmpw, visual_groups.cmpw),
     ]
     
     outer_tab_buttons  = ""
