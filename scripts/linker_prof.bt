@@ -47,8 +47,12 @@ uprobe:/lib64/ld-linux-x86-64.so.2:_dl_start
 uprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
 /pid == cpid/
 {
-    @map_enter[tid] = nsecs;
-    @so_name[tid] = str(arg1);
+    $depth = @map_depth[pid, tid];
+
+    @map_enter[pid, tid, $depth] = nsecs;
+    @so_lib_name[pid, tid, $depth]   = str(arg1);
+
+    @map_depth[pid, tid]++;
 }
 
 /*
@@ -57,19 +61,23 @@ uprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
  * spent opening and mapping shared libraries (.so files).
 */
 uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
-/@map_enter[tid]/
+/@map_depth[pid, tid] > 0/
 {
-    $duration_ns = (int64)nsecs - (int64)@map_enter[tid];
+    @map_depth[pid, tid]--;
+
+    $depth = @map_depth[pid, tid];
+
+    $duration_ns    = (int64)nsecs - (int64)@map_enter[pid, tid, $depth];
     @map_time[pid] += $duration_ns;
     @map_count[pid]++;
 
-    $name = @so_name[tid];
+    $name = @so_lib_name[pid, tid, $depth];
     if ($name != "") {
-        @so_durations[$name] += $duration_ns;
+        @so_lib_durations[$name] += $duration_ns;
     }
 
-    $_ = delete(@map_enter[tid]);
-    $_ = delete(@so_name[tid]);
+    $_ = delete(@map_enter[pid, tid, $depth]);
+    $_ = delete(@so_lib_name[pid, tid, $depth]);
 }
 
 /*
@@ -79,7 +87,10 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
 uprobe:/lib64/ld-linux-x86-64.so.2:_dl_relocate_object
 /pid == cpid/
 {
-    @reloc_enter[tid] = nsecs;
+    $depth = @reloc_depth[pid, tid];
+
+    @reloc_enter[pid, tid, $depth] = nsecs;
+    @reloc_depth[pid, tid]++;
 }
 
 /*
@@ -88,12 +99,16 @@ uprobe:/lib64/ld-linux-x86-64.so.2:_dl_relocate_object
  * across the application and its loaded libraries.
 */
 uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_relocate_object
-/@reloc_enter[tid]/
+/@reloc_depth[pid, tid] > 0/
 {
-    @reloc_time[pid] += (int64)nsecs - (int64)@reloc_enter[tid];
+    @reloc_depth[pid, tid]--;
+
+    $depth = @reloc_depth[pid, tid];
+
+    @reloc_time[pid] += (int64)nsecs - (int64)@reloc_enter[pid, tid, $depth];
     @reloc_count[pid]++;
 
-    $_ = delete(@reloc_enter[tid]);
+    $_ = delete(@reloc_enter[pid, tid, $depth]);
 }
 
 /*
@@ -107,8 +122,8 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:dl_main
 {
     $now = nsecs;
 
-    $startup = 0;
-    $kernel = 0;
+    $startup  = 0;
+    $kernel   = 0;
     $ld_total = 0;
 
     if (@exec_start[pid]) {
@@ -123,7 +138,7 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:dl_main
         $ld_total = (int64)$now - (int64)@ld_start[pid];
     }
 
-    printf("{\"pid\": %d, \"kernel_ns\": %d, \"ld_total_ns\": %d, \"map_count\": %d, \"map_time_ns\": %d, \"reloc_count\": %d, \"reloc_time_ns\": %d, \"startup_time_ns\": %d, ",
+    printf("{\"pid\": %d, \"kernel_ns\": %d, \"ld_ns\": %d, \"map_count\": %d, \"map_time_ns\": %d, \"reloc_count\": %d, \"reloc_time_ns\": %d, \"startup_time_ns\": %d, ",
       pid,
 
       $kernel,
@@ -159,8 +174,9 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:dl_main
 END
 {
     $is_first_so = 1;
-    printf("\"so\": {");
-    for ($kv : @so_durations) {
+    printf("\"so_libs\": {");
+    
+    for ($kv : @so_lib_durations) {
         if ($is_first_so == 1) {
             printf("\"%s\": %d", $kv.0, $kv.1);
             $is_first_so = 0;
@@ -168,6 +184,7 @@ END
             printf(", \"%s\": %d", $kv.0, $kv.1);
         }
     }
+    
     printf("}}\n");
 
     clear(@exec_start);
@@ -177,11 +194,13 @@ END
     clear(@map_enter);
     clear(@map_time);
     clear(@map_count);
+    clear(@map_depth);
 
-    clear(@so_name);
-    clear(@so_durations);
+    clear(@so_lib_name);
+    clear(@so_lib_durations);
 
     clear(@reloc_enter);
     clear(@reloc_time);
     clear(@reloc_count);
+    clear(@reloc_depth);
 }
