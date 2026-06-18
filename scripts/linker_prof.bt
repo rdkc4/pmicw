@@ -1,118 +1,199 @@
 #!/usr/bin/env bpftrace
 
-/* 
- * Kernel execution phase
- *
- * t_exec:
- *   Timestamp when execve syscall begins.
- *
- * kernel:
- *   Total time spent inside kernel preparing process execution:
- *   ELF loading, interpreter setup, memory mapping, etc.
+/*
+ * ELF startup profiler using ld.so and kernel lifecycle hooks.
+ * Tracks a process from the initial execve system call through the 
+ * dynamic linker stages up until the handoff to application main().
+*/
+
+/*
+ * Hooks the entry of the execve system call.
+ * Triggers only if the process matches the target child PID (cpid)
+ * and stores the initial timestamp in nanoseconds.
 */
 tracepoint:syscalls:sys_enter_execve
 /pid == cpid/
 {
-    @t_exec[pid] = nsecs;
+    @exec_start[pid] = nsecs;
 }
 
-/* 
- * Transition into user space
- *
- * Marks the moment kernel hands control to ld.so.
- *
- * kernel:
- *   Final kernel-side startup duration.
- *
- * t_map_start:
- *   Start of dynamic linker mapping phase (ld.so execution begins).
+/*
+ * Hooks the exit of the execve system call.
+ * Calculates the absolute overhead of the kernel-space process 
+ * setup (memory mapping, ELF parsing) before user-space takes over.
 */
 tracepoint:syscalls:sys_exit_execve
 /pid == cpid/
 {
-    $now = nsecs;
-    if (@t_exec[pid]) {
-        @kernel[pid] = $now - @t_exec[pid];
-    }
-    @t_map_start[pid] = $now;
-}
-
-/* 
- * Mapping => relocation boundary
- *
- * Heuristic based on first mprotect() call during startup.
- *
- * map_duration:
- *   Time from ld.so start until memory protection stabilizes.
- *
- * t_reloc_start:
- *   Approximate beginning of relocation processing phase.
-*/
-tracepoint:syscalls:sys_enter_mprotect
-/pid == cpid/
-{
-    $now = nsecs;
-    if (@t_map_start[pid] && !@t_reloc_start[pid]) {
-        @map_duration[pid] = $now - @t_map_start[pid];
-        @t_reloc_start[pid] = $now;
+    if (@exec_start[pid]) {
+        @kernel_time[pid] = (int64)nsecs - (int64)@exec_start[pid];
     }
 }
 
 /*
- * Startup completion boundary
- *
- * Triggered when libc initialization completes and control
- * is passed to __libc_start_main().
- *
- * reloc:
- *   Time spent after relocation begins until program entry.
- *
- * total:
- *   Full measured startup lifecycle from execve → main().
+ * Hooks the main entry point of the dynamic linker (_dl_start).
+ * Marks the exact moment the runtime linker begins bootstrapping itself.
+*/
+uprobe:/lib64/ld-linux-x86-64.so.2:_dl_start
+/pid == cpid/
+{
+    @ld_start[pid] = nsecs;
+}
+
+/*
+ * Entry probe for shared object dependency loading.
+ * Uses Thread ID (tid) to safely track nested or concurrent library loads.
+*/
+uprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
+/pid == cpid/
+{
+    @map_enter[tid] = nsecs;
+}
+
+/*
+ * Return probe for shared object dependency loading.
+ * Increments the total dependency count and accumulates the time 
+ * spent opening and mapping shared libraries (.so files).
+*/
+uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
+/@map_enter[tid]/
+{
+    @map_time[pid] += (int64)nsecs - (int64)@map_enter[tid];
+    @map_count[pid]++;
+
+    $_ = delete(@map_enter[tid]);
+}
+
+/*
+ * Entry probe for symbol relocation tracking.
+ * Tracks when the linker begins resolving variables and functions.
+*/
+uprobe:/lib64/ld-linux-x86-64.so.2:_dl_relocate_object
+/pid == cpid/
+{
+    @reloc_enter[tid] = nsecs;
+}
+
+/*
+ * Return probe for symbol relocation tracking.
+ * Accumulates the total time spent linking symbol references 
+ * across the application and its loaded libraries.
+*/
+uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_relocate_object
+/@reloc_enter[tid]/
+{
+    @reloc_time[pid] += (int64)nsecs - (int64)@reloc_enter[tid];
+    @reloc_count[pid]++;
+
+    $_ = delete(@reloc_enter[tid]);
+}
+
+/*
+ * Entry probe for library and constructor initialization.
+ * Hooks the entry point where constructors and library init functions run.
+*/
+uprobe:/lib64/ld-linux-x86-64.so.2:_dl_init
+/pid == cpid/
+{
+    @init_enter[pid] = nsecs;
+}
+
+/*
+ * Return probe for library and constructor initialization.
+ * Measures total execution time of all user/system initialization.
+*/
+uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_init
+/@init_enter[tid]/
+{
+    @init_time[pid] += (int64)nsecs - (int64)@init_enter[tid];
+    @init_count[pid]++;
+
+    $_ = delete(@init_enter[tid]);
+}
+
+/*
+ * Entry probe for application runtime handoff.
+ * This is the final hook, running right before control goes to main().
+ * It aggregates metrics, prints structured JSON, and sends a SIGKILL (signal 9)
+ * to the target process so it acts purely as a startup benchmark tool.
 */
 uprobe:/lib/x86_64-linux-gnu/libc.so.6:__libc_start_main
 /pid == cpid/
 {
     $now = nsecs;
 
-    $kernel = @kernel[pid];
-    $map    = @map_duration[pid];
-    $reloc  = 0;
-    
-    if (@t_reloc_start[pid]) {
-        $reloc = $now - @t_reloc_start[pid];
+    $startup = 0;
+    $kernel = 0;
+    $ld_total = 0;
+
+    if (@exec_start[pid]) {
+        $startup = (int64)$now - (int64)@exec_start[pid];
+    }
+
+    if (@kernel_time[pid]) {
+        $kernel = @kernel_time[pid];
+    }
+
+    if (@ld_start[pid]) {
+        $ld_total = (int64)$now - (int64)@ld_start[pid];
     }
     
-    $total = $now - @t_exec[pid];
+    $total = (int64)$now - (int64)@exec_start[pid];
 
-    printf("{\"pid\": %d, \"kernel_time_ns\": %d, \"map_time_ns\": %d, \"reloc_time_ns\": %d, \"startup_time_ns\": %d}",
-        pid,
-        $kernel,
-        $map,
-        $reloc,
-        $total
+    printf("{\"pid\": %d, \"kernel_ns\": %d, \"ld_total_ns\": %d, \"map_count\": %d, \"map_time_ns\": %d, \"reloc_count\": %d, \"reloc_time_ns\": %d, \"init_count\": %d, \"init_time_ns\": %d, \"startup_time_ns\": %d}",
+      pid,
+
+      $kernel,
+      $ld_total,
+      
+      @map_count[pid],
+      @map_time[pid],
+      
+      @reloc_count[pid],
+      @reloc_time[pid],
+      
+      @init_count[pid],
+      @init_time[pid],
+      
+      $startup
     );
 
-    /*
-     * Force termination of workload immediately after measurement.
-     * This ensures deterministic startup timing and avoids noise
-     * from post-start application execution.
-    */
-    signal(9);
+    $_ = delete(@exec_start[pid]);
+    $_ = delete(@kernel_time[pid]);
+    $_ = delete(@ld_start[pid]);
 
-    /* cleanup */
-    delete(@t_exec[pid]);
-    delete(@kernel[pid]);
-    delete(@t_map_start[pid]);
-    delete(@map_duration[pid]);
-    delete(@t_reloc_start[pid]);
+    $_ = delete(@map_time[pid]);
+    $_ = delete(@map_count[pid]);
+
+    $_ = delete(@reloc_time[pid]);
+    $_ = delete(@reloc_count[pid]);
+
+    $_ = delete(@init_time[pid]);
+    $_ = delete(@init_count[pid]);
+
+    exit();
 }
 
+/*
+ * Script teardown probe.
+ * Executes when the bpftrace script exits. 
+ * Cleans up all global maps from kernel memory to prevent leaks.
+*/
 END
 {
-    clear(@t_exec);
-    clear(@kernel);
-    clear(@t_map_start);
-    clear(@map_duration);
-    clear(@t_reloc_start);
+    clear(@exec_start);
+    clear(@kernel_time);
+    clear(@ld_start);
+
+    clear(@map_enter);
+    clear(@map_time);
+    clear(@map_count);
+
+    clear(@reloc_enter);
+    clear(@reloc_time);
+    clear(@reloc_count);
+
+    clear(@init_enter);
+    clear(@init_time);
+    clear(@init_count);
 }
