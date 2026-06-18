@@ -48,6 +48,7 @@ uprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
 /pid == cpid/
 {
     @map_enter[tid] = nsecs;
+    @so_name[tid] = str(arg1);
 }
 
 /*
@@ -58,10 +59,17 @@ uprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
 uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
 /@map_enter[tid]/
 {
-    @map_time[pid] += (int64)nsecs - (int64)@map_enter[tid];
+    $duration_ns = (int64)nsecs - (int64)@map_enter[tid];
+    @map_time[pid] += $duration_ns;
     @map_count[pid]++;
 
+    $name = @so_name[tid];
+    if ($name != "") {
+        @so_durations[$name] += $duration_ns;
+    }
+
     $_ = delete(@map_enter[tid]);
+    $_ = delete(@so_name[tid]);
 }
 
 /*
@@ -89,35 +97,12 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_relocate_object
 }
 
 /*
- * Entry probe for library and constructor initialization.
- * Hooks the entry point where constructors and library init functions run.
-*/
-uprobe:/lib64/ld-linux-x86-64.so.2:_dl_init
-/pid == cpid/
-{
-    @init_enter[pid] = nsecs;
-}
-
-/*
- * Return probe for library and constructor initialization.
- * Measures total execution time of all user/system initialization.
-*/
-uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_init
-/@init_enter[tid]/
-{
-    @init_time[pid] += (int64)nsecs - (int64)@init_enter[tid];
-    @init_count[pid]++;
-
-    $_ = delete(@init_enter[tid]);
-}
-
-/*
  * Entry probe for application runtime handoff.
  * This is the final hook, running right before control goes to main().
  * It aggregates metrics, prints structured JSON, and sends a SIGKILL (signal 9)
  * to the target process so it acts purely as a startup benchmark tool.
 */
-uprobe:/lib/x86_64-linux-gnu/libc.so.6:__libc_start_main
+uretprobe:/lib64/ld-linux-x86-64.so.2:dl_main
 /pid == cpid/
 {
     $now = nsecs;
@@ -137,10 +122,8 @@ uprobe:/lib/x86_64-linux-gnu/libc.so.6:__libc_start_main
     if (@ld_start[pid]) {
         $ld_total = (int64)$now - (int64)@ld_start[pid];
     }
-    
-    $total = (int64)$now - (int64)@exec_start[pid];
 
-    printf("{\"pid\": %d, \"kernel_ns\": %d, \"ld_total_ns\": %d, \"map_count\": %d, \"map_time_ns\": %d, \"reloc_count\": %d, \"reloc_time_ns\": %d, \"init_count\": %d, \"init_time_ns\": %d, \"startup_time_ns\": %d}",
+    printf("{\"pid\": %d, \"kernel_ns\": %d, \"ld_total_ns\": %d, \"map_count\": %d, \"map_time_ns\": %d, \"reloc_count\": %d, \"reloc_time_ns\": %d, \"startup_time_ns\": %d, ",
       pid,
 
       $kernel,
@@ -151,9 +134,6 @@ uprobe:/lib/x86_64-linux-gnu/libc.so.6:__libc_start_main
       
       @reloc_count[pid],
       @reloc_time[pid],
-      
-      @init_count[pid],
-      @init_time[pid],
       
       $startup
     );
@@ -168,9 +148,6 @@ uprobe:/lib/x86_64-linux-gnu/libc.so.6:__libc_start_main
     $_ = delete(@reloc_time[pid]);
     $_ = delete(@reloc_count[pid]);
 
-    $_ = delete(@init_time[pid]);
-    $_ = delete(@init_count[pid]);
-
     exit();
 }
 
@@ -181,6 +158,18 @@ uprobe:/lib/x86_64-linux-gnu/libc.so.6:__libc_start_main
 */
 END
 {
+    $is_first_so = 1;
+    printf("\"so\": {");
+    for ($kv : @so_durations) {
+        if ($is_first_so == 1) {
+            printf("\"%s\": %d", $kv.0, $kv.1);
+            $is_first_so = 0;
+        } else {
+            printf(", \"%s\": %d", $kv.0, $kv.1);
+        }
+    }
+    printf("}}\n");
+
     clear(@exec_start);
     clear(@kernel_time);
     clear(@ld_start);
@@ -189,11 +178,10 @@ END
     clear(@map_time);
     clear(@map_count);
 
+    clear(@so_name);
+    clear(@so_durations);
+
     clear(@reloc_enter);
     clear(@reloc_time);
     clear(@reloc_count);
-
-    clear(@init_enter);
-    clear(@init_time);
-    clear(@init_count);
 }
