@@ -50,8 +50,9 @@ uprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
     $depth = @map_depth[pid, tid];
 
     @map_enter[pid, tid, $depth] = nsecs;
-    @so_lib_name[pid, tid, $depth]   = str(arg1);
-
+    /*
+    @so_lib_name[pid, tid, $depth] = str(arg1);
+    */
     @map_depth[pid, tid]++;
 }
 
@@ -71,13 +72,17 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
     @map_time[pid] += $duration_ns;
     @map_count[pid]++;
 
+    /*
     $name = @so_lib_name[pid, tid, $depth];
     if ($name != "") {
         @so_lib_durations[$name] += $duration_ns;
     }
+    */
 
     $_ = delete(@map_enter[pid, tid, $depth]);
+    /*
     $_ = delete(@so_lib_name[pid, tid, $depth]);
+    */
 }
 
 /*
@@ -114,7 +119,6 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_relocate_object
 /*
  * Entry probe for application runtime handoff.
  * This is the final hook, running right before control goes to main().
- * It aggregates metrics, prints structured JSON, and sends a SIGKILL (signal 9)
  * to the target process so it acts purely as a startup benchmark tool.
 */
 uretprobe:/lib64/ld-linux-x86-64.so.2:dl_main
@@ -122,46 +126,49 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:dl_main
 {
     $now = nsecs;
 
-    $startup  = 0;
-    $kernel   = 0;
-    $ld_total = 0;
+    @startup[pid]  = 0;
+    @ld_total[pid] = 0;
 
     if (@exec_start[pid]) {
-        $startup = (int64)$now - (int64)@exec_start[pid];
-    }
-
-    if (@kernel_time[pid]) {
-        $kernel = @kernel_time[pid];
+        @startup[pid] = (int64)$now - (int64)@exec_start[pid];
     }
 
     if (@ld_start[pid]) {
-        $ld_total = (int64)$now - (int64)@ld_start[pid];
+        @ld_total[pid] = (int64)$now - (int64)@ld_start[pid];
     }
 
-    printf("{\"pid\": %d, \"kernel_ns\": %d, \"ld_ns\": %d, \"map_count\": %d, \"map_time_ns\": %d, \"reloc_count\": %d, \"reloc_time_ns\": %d, \"startup_time_ns\": %d, ",
-      pid,
+    printf("{\"pid\": %ld, \"kernel_ns\": %ld, \"ld_ns\": %ld, \"map_count\": %ld, \"map_time_ns\": %ld, \"reloc_count\": %ld, \"reloc_time_ns\": %ld, \"startup_time_ns\": %ld",
+        cpid,
 
-      $kernel,
-      $ld_total,
-      
-      @map_count[pid],
-      @map_time[pid],
-      
-      @reloc_count[pid],
-      @reloc_time[pid],
-      
-      $startup
+        @kernel_time[cpid],
+        @ld_total[cpid],
+        
+        @map_count[cpid],
+        @map_time[cpid],
+        
+        @reloc_count[cpid],
+        @reloc_time[cpid],
+        
+        @startup[cpid]
     );
+    
 
-    $_ = delete(@exec_start[pid]);
-    $_ = delete(@kernel_time[pid]);
-    $_ = delete(@ld_start[pid]);
-
-    $_ = delete(@map_time[pid]);
-    $_ = delete(@map_count[pid]);
-
-    $_ = delete(@reloc_time[pid]);
-    $_ = delete(@reloc_count[pid]);
+    /*
+    $is_first_so = 1;
+    printf("\"so_libs\": {");
+    
+    for ($kv : @so_lib_durations) {
+        if ($is_first_so == 1) {
+            printf("\"%s\": %ld", $kv.0, $kv.1);
+            $is_first_so = 0;
+        } else {
+            printf(", \"%s\": %ld", $kv.0, $kv.1);
+        }
+    }
+    printf("}");
+    */
+    
+    printf("}\n");
 
     exit();
 }
@@ -169,38 +176,30 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:dl_main
 /*
  * Script teardown probe.
  * Executes when the bpftrace script exits. 
+ * It aggregates metrics, prints structured JSON, and exits.
  * Cleans up all global maps from kernel memory to prevent leaks.
 */
 END
 {
-    $is_first_so = 1;
-    printf("\"so_libs\": {");
-    
-    for ($kv : @so_lib_durations) {
-        if ($is_first_so == 1) {
-            printf("\"%s\": %d", $kv.0, $kv.1);
-            $is_first_so = 0;
-        } else {
-            printf(", \"%s\": %d", $kv.0, $kv.1);
-        }
-    }
-    
-    printf("}}\n");
-
     clear(@exec_start);
     clear(@kernel_time);
     clear(@ld_start);
+    clear(@ld_total);
 
     clear(@map_enter);
     clear(@map_time);
     clear(@map_count);
     clear(@map_depth);
 
+    /*
     clear(@so_lib_name);
     clear(@so_lib_durations);
+    */
 
     clear(@reloc_enter);
     clear(@reloc_time);
     clear(@reloc_count);
     clear(@reloc_depth);
+
+    clear(@startup)
 }
