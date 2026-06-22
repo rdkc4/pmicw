@@ -4,7 +4,7 @@ import yaml
 
 from csv_writer import ensure_dir, repo_to_filename
 from measurement import Measurement, Metrics
-from paths import THRESHOLDS
+from paths import THRESHOLDS_DIR
 
 
 def remove_suffix(name: str, stats_metrics: set) -> None:
@@ -14,8 +14,8 @@ def remove_suffix(name: str, stats_metrics: set) -> None:
 
 def get_yaml_path(csv_filename: str)-> Path:
     filename = csv_filename.replace(".csv", ".yaml")
-    path = THRESHOLDS / filename
-    ensure_dir(THRESHOLDS / filename)
+    path = THRESHOLDS_DIR / filename
+    ensure_dir(THRESHOLDS_DIR / filename)
     return path
 
 def compute_thresholds(args: argparse.Namespace, yaml_path: Path | str, measurement: Measurement) -> None:

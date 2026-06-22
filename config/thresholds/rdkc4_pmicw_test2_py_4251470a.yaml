@@ -1,0 +1,105 @@
+thresholds:
+  branch_miss_rate_pct:
+    direction: lower_better
+    improvement_threshold_pct: 25.212520331531763
+    noise_floor_pct: 25.212520331531763
+    regression_threshold_pct: 25.212520331531763
+  context_switches:
+    direction: lower_better
+    improvement_threshold_pct: 50.704597424466144
+    noise_floor_pct: 50.704597424466144
+    regression_threshold_pct: 50.704597424466144
+  gpu_activity_pct:
+    direction: higher_better
+    improvement_threshold_pct: 3.0
+    noise_floor_pct: 2.0
+    regression_threshold_pct: 3.0
+  gpu_vram_pct:
+    direction: lower_better
+    improvement_threshold_pct: 3.0
+    noise_floor_pct: 2.0
+    regression_threshold_pct: 3.0
+  ipc:
+    direction: higher_better
+    improvement_threshold_pct: 3.800048223938361
+    noise_floor_pct: 3.800048223938361
+    regression_threshold_pct: 3.800048223938361
+  l1d_miss_rate_pct:
+    direction: lower_better
+    improvement_threshold_pct: 1.0
+    noise_floor_pct: 0.5
+    regression_threshold_pct: 1.0
+  l1i_miss_rate_pct:
+    direction: lower_better
+    improvement_threshold_pct: 1.0
+    noise_floor_pct: 0.5
+    regression_threshold_pct: 1.0
+  l2_miss_rate_pct:
+    direction: lower_better
+    improvement_threshold_pct: 11.367191708032838
+    noise_floor_pct: 11.367191708032838
+    regression_threshold_pct: 11.367191708032838
+  linker_cycles:
+    direction: lower_better
+    improvement_threshold_pct: 3.0
+    noise_floor_pct: 2.0
+    regression_threshold_pct: 3.0
+  llc_miss_rate_pct:
+    direction: lower_better
+    improvement_threshold_pct: 19.541438107542643
+    noise_floor_pct: 19.541438107542643
+    regression_threshold_pct: 19.541438107542643
+  major_faults:
+    direction: lower_better
+    improvement_threshold_pct: 2.0
+    noise_floor_pct: 1.0
+    regression_threshold_pct: 2.0
+  minor_faults:
+    direction: lower_better
+    improvement_threshold_pct: 139.92655862393454
+    noise_floor_pct: 139.92655862393454
+    regression_threshold_pct: 139.92655862393454
+  page_faults:
+    direction: lower_better
+    improvement_threshold_pct: 139.8560636986213
+    noise_floor_pct: 139.8560636986213
+    regression_threshold_pct: 139.8560636986213
+  rss_mb:
+    direction: lower_better
+    improvement_threshold_pct: 103.28603362175237
+    noise_floor_pct: 103.28603362175237
+    regression_threshold_pct: 103.28603362175237
+  startup_time_ms:
+    direction: lower_better
+    improvement_threshold_pct: 5.0
+    noise_floor_pct: 5.0
+    regression_threshold_pct: 5.0
+  task_clock_ms:
+    direction: lower_better
+    improvement_threshold_pct: 25.198136495191783
+    noise_floor_pct: 25.198136495191783
+    regression_threshold_pct: 25.198136495191783
+  thread_count:
+    direction: neutral
+    improvement_threshold_pct: 155.5668626479094
+    noise_floor_pct: 155.5668626479094
+    regression_threshold_pct: 155.5668626479094
+  thread_utilization_pct:
+    direction: higher_better
+    improvement_threshold_pct: 3.0
+    noise_floor_pct: 2.0
+    regression_threshold_pct: 3.0
+  vms_mb:
+    direction: lower_better
+    improvement_threshold_pct: 167.10989880458553
+    noise_floor_pct: 167.10989880458553
+    regression_threshold_pct: 167.10989880458553
+  wall_time_ms:
+    direction: lower_better
+    improvement_threshold_pct: 1.7997201789206003
+    noise_floor_pct: 1.7997201789206003
+    regression_threshold_pct: 1.7997201789206003
+workload:
+  iterations: 4
+  name: test2.py
+  run_id: 61bb1c72-9e3a-4231-ac44-9e0fa2a6b6c4
