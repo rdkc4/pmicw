@@ -31,6 +31,11 @@ Core Structural Rules:
                            - default: 1
                            - usage: [--iteration <n>], where n > 0
 
+    - `-ct`, `--compute-thresholds` - z-score for dynamic threshold computation based on this workload
+                                    - default: 0 (won't compute thresholds)
+                                    - recommended: 2
+                                    - usage: [--compute-thresholds <n>], where n > 0                    
+
     - `-help`, `--help` - shows help message and exits
 
 
@@ -60,6 +65,10 @@ Core Structural Rules:
 
     - `-cmpw`, `--compare-with` - compare current version with a specific version
                                 - usage: [--compare-with <version>]
+
+    - `-uct`, `--use-computed-thresholds` - use computed thresholds in comparisons
+                                          - if no path provided defaults to configuration in config/thresholds/ matching its csv name
+                                          - usage: [--use-computed-threshold (<path>, optional)]                          
 
     - `-rfmt`, `--report-format` - list of report formats separated by comma 
                                  - format in which comparison data should be reported
@@ -185,6 +194,13 @@ def add_runner_options(parser: argparse.ArgumentParser) -> None:
     )
 
     options.add_argument(
+        '-ct', '--compute-thresholds',
+        type    = parse_positive_int,
+        default = 0,
+        help    = 'compute thresholds based on workload and defined z-score (recommended: 2)'
+    )
+
+    options.add_argument(
         '-h', '--help',
         action = 'help',
         help   = 'show this help message and exit'
@@ -276,6 +292,15 @@ def add_comparison_options(parser: argparse.ArgumentParser) -> None:
         type = str,
         help = 'compare current run with a specific run by its run ID'
     )
+
+    options.add_argument(
+        '-uct', '--use-computed-thresholds',
+        nargs   = '?',
+        const   = 'default',
+        default = None,
+        type    = str,
+        help    = 'compare using computed thresholds, if no path provided defaults to config/thresholds/ path corresponding to its csv name'
+     )
 
     options.add_argument(
         '-rfmt', '--report-format',

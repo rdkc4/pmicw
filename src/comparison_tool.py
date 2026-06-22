@@ -150,7 +150,7 @@ def visualize(
 
 def main() -> None:
     args          = parse_comparison_args()
-    threshold_cfg = load_thresholds_config("config/comparison_threshold_config.yaml")
+    threshold_cfg = load_thresholds_config(args, "config/comparison_threshold_config.yaml")
     plot_cfg      = load_plot_config("config/plot_config.yaml")
     cmp_dfs       = compare(args, threshold_cfg)
 

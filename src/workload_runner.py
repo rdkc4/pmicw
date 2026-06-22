@@ -48,6 +48,7 @@ from metric_monitor import start_monitoring
 from metric_config import PerfGroupConfig, ProfilerConfig, Segments, load_config
 from record_parser import parse_cpu_prof_output
 from csv_writer import write
+from threshold_config_generator import compute_thresholds
 from workload_context import WorkloadContext, WorkloadMetricSelection, WorkloadMonitors
 
 @dataclass
@@ -244,6 +245,8 @@ def main():
     if not path:
         sys.exit(1)
 
+    compute_thresholds(args, "config/comparison_threshold_config.yaml", measurement)
+        
     result = RunnerResult(str(measurement.metadata.run_id), measurement.workload.name, str(path))
     print(result.to_json(), file = sys.stdout)
 
