@@ -39,8 +39,8 @@ class Segments(StrEnum):
     GPU       = "gpu"
     MEMORY    = "memory"
     THREAD    = "thread"
-    LD        = "ld"
     PERF      = "perf"
+    STARTUP   = "startup"
 
 @dataclass
 class BaseMetric:
@@ -113,7 +113,6 @@ class PerfGroup:
     """
     name:       str
     events:     list[str]
-    use_ld_env: bool = False
 
 @dataclass
 class SegmentConfig:
@@ -179,15 +178,6 @@ class ProfilerConfig:
                     result.append((seg_name, m))
 
         return result
-    
-@dataclass
-class PerfGroupConfig:
-    """
-    Perf group extended with optional environment variables
-    """
-    name:   str
-    events: list[str]
-    env:    dict[str, str] | None
 
 SAFE_BUILTINS = {"abs", "round", "min", "max", "sum"}
 
@@ -206,8 +196,7 @@ def load_config(path: str = "metrics.yaml") -> ProfilerConfig:
         perf_groups = [
             PerfGroup(
                 name       = pg["name"],
-                events     = pg["events"],
-                use_ld_env = pg.get("use_ld_env", False),
+                events     = pg["events"]
             )
             for pg in seg_raw.get("perf_groups", [])
         ]

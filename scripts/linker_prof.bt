@@ -12,9 +12,13 @@
  * and stores the initial timestamp in nanoseconds.
 */
 tracepoint:syscalls:sys_enter_execve
-/pid == cpid/
 {
-    @exec_start[pid] = nsecs;
+    $target = str(args.filename);
+
+    // Ignore if the shell is invoking itself or if it's the initial bash/sh wrapper
+    if ($target != "sh" && $target != "/bin/sh" && $target != "/usr/bin/sh") {
+        @exec_start[pid] = nsecs;
+    }
 }
 
 /*
@@ -23,7 +27,7 @@ tracepoint:syscalls:sys_enter_execve
  * setup (memory mapping, ELF parsing) before user-space takes over.
 */
 tracepoint:syscalls:sys_exit_execve
-/pid == cpid/
+/comm != "sh"/
 {
     if (@exec_start[pid]) {
         @kernel_time[pid] = (int64)nsecs - (int64)@exec_start[pid];
@@ -35,7 +39,6 @@ tracepoint:syscalls:sys_exit_execve
  * Marks the exact moment the runtime linker begins bootstrapping itself.
 */
 uprobe:/lib64/ld-linux-x86-64.so.2:_dl_start
-/pid == cpid/
 {
     @ld_start[pid] = nsecs;
 }
@@ -45,7 +48,6 @@ uprobe:/lib64/ld-linux-x86-64.so.2:_dl_start
  * Uses Thread ID (tid) to safely track nested or concurrent library loads.
 */
 uprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
-/pid == cpid/
 {
     $depth = @map_depth[pid, tid];
 
@@ -90,7 +92,6 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
  * Tracks when the linker begins resolving variables and functions.
 */
 uprobe:/lib64/ld-linux-x86-64.so.2:_dl_relocate_object
-/pid == cpid/
 {
     $depth = @reloc_depth[pid, tid];
 
@@ -122,7 +123,6 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_relocate_object
  * to the target process so it acts purely as a startup benchmark tool.
 */
 uretprobe:/lib64/ld-linux-x86-64.so.2:dl_main
-/pid == cpid/
 {
     $now = nsecs;
 
@@ -137,21 +137,18 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:dl_main
         @ld_total[pid] = (int64)$now - (int64)@ld_start[pid];
     }
 
-    printf("{\"pid\": %ld, \"kernel_ns\": %ld, \"ld_ns\": %ld, \"map_count\": %ld, \"map_time_ns\": %ld, \"reloc_count\": %ld, \"reloc_time_ns\": %ld, \"startup_time_ns\": %ld",
-        cpid,
-
-        @kernel_time[cpid],
-        @ld_total[cpid],
+    printf("{\"kernel_ns\": %ld, \"ld_ns\": %ld, \"map_count\": %ld, \"map_time_ns\": %ld, \"reloc_count\": %ld, \"reloc_time_ns\": %ld, \"startup_time_ns\": %ld",
+        @kernel_time[pid],
+        @ld_total[pid],
         
-        @map_count[cpid],
-        @map_time[cpid],
+        @map_count[pid],
+        @map_time[pid],
         
-        @reloc_count[cpid],
-        @reloc_time[cpid],
+        @reloc_count[pid],
+        @reloc_time[pid],
         
-        @startup[cpid]
+        @startup[pid]
     );
-    
 
     /*
     $is_first_so = 1;
@@ -168,7 +165,7 @@ uretprobe:/lib64/ld-linux-x86-64.so.2:dl_main
     printf("}");
     */
     
-    printf("}\n");
+    printf("}");
 
     exit();
 }

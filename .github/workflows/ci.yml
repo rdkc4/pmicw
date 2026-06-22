@@ -112,7 +112,7 @@ jobs:
           export PATH="$GITHUB_WORKSPACE/.venv/bin:$PATH"
  
           ./run.sh \
-            -m cpu,memory,thread,gpu \
+            -m cpu,memory,thread,gpu,startup \
             -it 5 \
             -wit 3 \
             -cmp 10 \

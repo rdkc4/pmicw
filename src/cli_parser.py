@@ -19,9 +19,9 @@ Core Structural Rules:
     
  - [options]
     - `-m`, `--metric` - list of metrics separated by comma
-                       - options: wall-time, cpu, gpu, memory, thread
+                       - options: wall-time, cpu, gpu, memory, thread, startup
                        - default: wall-time (always included)
-                       - usage: [--metric wall-time,cpu,gpu,memory,thread]
+                       - usage: [--metric wall-time,cpu,gpu,memory,thread,startup]
 
     - `-wit`, `--warmup-iteration` - number of warmup iterations workload should run
                                    - default: 0
@@ -98,6 +98,7 @@ class MetricOptions(StrEnum):
     GPU       = 'gpu'
     MEMORY    = 'memory'
     THREAD    = 'thread'
+    STARTUP   = 'startup'
 
 class ReportFormatOptions(StrEnum):
     """
@@ -175,7 +176,7 @@ def add_runner_options(parser: argparse.ArgumentParser) -> None:
     options.add_argument(
         '-m', '--metric',
         type    = parse_metrics,
-        default = ['wall-time'], # options: wall-time, cpu, gpu, memory, thread
+        default = ['wall-time'], # options: wall-time, cpu, gpu, memory, thread, startup
         help    = 'metrics to collect separated by comma (default: wall-time)'
     )
 

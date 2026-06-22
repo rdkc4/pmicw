@@ -34,19 +34,21 @@ Usage:
 import argparse
 from dataclasses import asdict, dataclass
 import json
+import signal
 import subprocess
 import sys
 import threading
 import time
 import os
+import psutil
 
 from cli_parser import parse_runner_args
 from command_config import CommandConfig, load_command_config
 from measurement import Measurement, Metadata, Metrics, Workload
 from metric_computer import compute_records
 from metric_monitor import start_monitoring
-from metric_config import PerfGroupConfig, ProfilerConfig, Segments, load_config
-from record_parser import parse_cpu_prof_output
+from metric_config import ProfilerConfig, Segments, load_config
+from record_parser import parse_perf_output
 from csv_writer import write
 from threshold_config_generator import compute_thresholds
 from workload_context import WorkloadContext, WorkloadMetricSelection, WorkloadMonitors
@@ -78,23 +80,25 @@ def run_workload(ctx: WorkloadContext, cfg: ProfilerConfig, cmd_cfg: CommandConf
 
     Returns dict that maps segment name to its metrics
     """
-    perf_event_groups = get_perf_groups(cfg, cmd_cfg.ld_environment, ctx.selected_metrics.cpu, ctx.env)
-    
-    start_monitoring(ctx, cfg, cmd_cfg.rocm_smi)
+
+    start_monitoring(ctx, cfg, cmd_cfg)
     try:
+        wrapper  = cmd_cfg.bash_wrapper.base_command if ctx.selected_metrics.startup else []
+        wrapper += ctx.command
+
         # preventing cold runs to affect statistics (optional)
         warmup_workload(ctx.command, ctx.warmup_iterations)
-
-        if perf_event_groups:
-            for event_group in perf_event_groups:
-                command = list(cmd_cfg.perf.base_command) + [f"{{{",".join(event_group.events)}}}"] + ctx.command
-                execute_workload(command, ctx, event_group.env)
+        if ctx.selected_metrics.cpu:
+            for event_group in cfg.segments[Segments.CPU].perf_groups:
+                command = list(cmd_cfg.perf.base_command) + [f"{{{",".join(event_group.events)}}}"] + wrapper
+                execute_workload(command, ctx)
 
         else:
-            execute_workload(ctx.command, ctx)
+            execute_workload(wrapper, ctx)
 
     finally:
         ctx.monitors.shutdown_event.set()
+        ctx.monitors.activity_event.set()
         for daemon in ctx.monitors.daemon_threads:
             daemon.join()
 
@@ -114,66 +118,77 @@ def execute_workload(
 
     Measures the wall time\n
     Notifies monitors when to start/stop\n
-    Parses perf/ld records if defined
+    Parses perf records if defined
     """
     for _ in range(ctx.iterations):
-        start = time.perf_counter()
+        ctx.monitors.activity_event.clear()
+        try:
+            proc = subprocess.Popen(
+                command,
+                stdout = subprocess.DEVNULL,
+                stderr = subprocess.PIPE,
+                text   = True,
+                env    = env
+            )
+        except Exception as e:
+            print(f"Failed to start process: {e}", file = sys.stderr)
+            continue
+        
+        if ctx.selected_metrics.cpu:
+            try:
+                perf_process = psutil.Process(proc.pid)
+                children     = []
+                deadline     = time.time() + 5.0
 
-        proc = subprocess.Popen(
-            command,
-            stdout = subprocess.PIPE,
-            stderr = subprocess.PIPE,
-            text   = True,
-            env    = env
-        )
+                while time.time() < deadline:
+                    try:
+                        children = perf_process.children()
+                        if children:
+                            break
 
-        ctx.monitors.active_pid[0] = proc.pid
+                    except psutil.NoSuchProcess:
+                        break
+
+                    time.sleep(0.01)
+
+                target_pid = children[0].pid if children else proc.pid
+
+            except psutil.NoSuchProcess:
+                target_pid = proc.pid
+        else:
+            target_pid = proc.pid
+
+        ctx.monitors.active_pid[0] = target_pid
         ctx.monitors.activity_event.set()
 
+        if ctx.selected_metrics.startup:
+            # giving some time for bpfscript to compile
+            time.sleep(2)
+            start = time.perf_counter()
+            
+            # Send SIGCONT to wake up the suspended shell, letting it fall through to 'exec'
+            try:
+                os.kill(target_pid, signal.SIGCONT)
+            except ProcessLookupError:
+                pass
+        
+        else:
+            start = time.perf_counter()
+
         _, stderr = proc.communicate()
-
-        if proc.returncode != 0:
-            ctx.monitors.activity_event.clear()
-            print(f"Warning: workload '{" ".join(command)}' failed with exit code {proc.returncode}.\n", file = sys.stderr)
-            continue
-
+        
         ctx.monitors.activity_event.clear()
         ctx.monitors.active_pid[0] = -1
+
+        if proc.returncode != 0:
+            print(f"Warning: workload '{" ".join(ctx.command)}' failed with exit code {proc.returncode}.\n", file = sys.stderr)
+            continue
+
         ctx.records[Segments.WALL_TIME].append({'execution_time': (time.perf_counter() - start) * 1000})
         
         if ctx.selected_metrics.cpu:
-            perf_record, link_record = parse_cpu_prof_output(stderr, proc.pid)
+            perf_record = parse_perf_output(stderr)
             ctx.records[Segments.PERF].append(perf_record)
-            ctx.records[Segments.LD].append(link_record)
-
-    
-def get_perf_groups(cfg: ProfilerConfig, ld_env: dict, cpu_selected: bool, base_env: dict[str, str]) -> list[PerfGroupConfig]:
-    """
-    Loads perf group configurations\n
-    Appends env for LD Environment if group uses ld
-    """
-    if not cpu_selected or Segments.CPU not in cfg.segments:
-        return []
-    
-    active_groups = []
-    cpu_segment   = cfg.segments[Segments.CPU]
-
-    for group in cpu_segment.perf_groups:
-        group_env = None
-        if group.use_ld_env:
-            group_env = base_env.copy()
-            for env_key, env_val in ld_env.items():
-                group_env[env_key] = env_val
-        
-        active_groups.append(
-            PerfGroupConfig(
-                name   = group.name,
-                events = group.events,
-                env    = group_env
-            )
-        )
-
-    return active_groups
 
 def setup_workload_context(args: argparse.Namespace):
     """
@@ -185,10 +200,11 @@ def setup_workload_context(args: argparse.Namespace):
 
     metrics = WorkloadMetricSelection(
         wall_time = True,
-        cpu       = Segments.CPU    in args.metric,
-        gpu       = Segments.GPU    in args.metric,
-        memory    = Segments.MEMORY in args.metric,
-        thread    = Segments.THREAD in args.metric
+        cpu       = Segments.CPU     in args.metric,
+        gpu       = Segments.GPU     in args.metric,
+        memory    = Segments.MEMORY  in args.metric,
+        thread    = Segments.THREAD  in args.metric,
+        startup   = Segments.STARTUP in args.metric
     )
 
     monitors = WorkloadMonitors(

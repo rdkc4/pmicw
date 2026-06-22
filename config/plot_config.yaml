@@ -29,6 +29,7 @@ plot_groups:
       - name: task_clock_ms
         suffix: mean
       - name: startup_time_ms
+        suffix: mean
 
   thread:
     metrics:

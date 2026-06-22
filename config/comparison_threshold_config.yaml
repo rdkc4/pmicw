@@ -112,18 +112,40 @@ thresholds:
     regression_threshold_pct: 2.0
 
 
-  linker_cycles:
+  kernel_time_ms:
     direction: lower_better
-    noise_floor_pct: 2.0
-    improvement_threshold_pct: 3.0
-    regression_threshold_pct: 3.0
-
-  startup_time_ms:
-    direction: lower_better
-    noise_floor_pct: 5.0
+    noise_floor_pct: 3.0
     improvement_threshold_pct: 5.0
     regression_threshold_pct: 5.0
 
+  ld_time_ms:
+    direction: lower_better
+    noise_floor_pct: 3.0
+    improvement_threshold_pct: 5.0
+    regression_threshold_pct: 5.0
+
+  map_time_ms:
+    direction: lower_better
+    noise_floor_pct: 3.0
+    improvement_threshold_pct: 5.0
+    regression_threshold_pct: 5.0
+
+  reloc_time_ms:
+    direction: lower_better
+    noise_floor_pct: 3.0
+    improvement_threshold_pct: 5.0
+    regression_threshold_pct: 5.0
+
+  startup_time_ms:
+    direction: lower_better
+    noise_floor_pct: 3.0
+    improvement_threshold_pct: 5.0
+    regression_threshold_pct: 5.0
+
+  startup_time_pct:
+    noise_floor_pct: 3.0
+    improvement_threshold_pct: 5.0
+    regression_threshold_pct: 5.0
 
   context_switches:
     direction: lower_better

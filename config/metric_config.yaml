@@ -26,8 +26,7 @@
 #
 # Perf groups (cpu segment only):
 #   Events within a group are submitted together in one `perf stat -e {…}`
-#   invocation. use_ld_env injects LD_DEBUG=statistics + LD_BIND_NOW=1 so
-#   dynamic-linker cycles are captured alongside the core group.
+#   invocation.
 #
 # Output field naming:
 #   ratio  : <numerator_key>_total, <denominator_key>_total (if in totals),
@@ -51,7 +50,6 @@ segments:
   cpu:
     perf_groups:
       - name: execution_core
-        use_ld_env: true
         events:
           - instructions
           - cycles
@@ -64,7 +62,6 @@ segments:
           - major-faults
 
       - name: l1_caches
-        use_ld_env: false
         events:
           - L1-dcache-loads
           - L1-dcache-load-misses
@@ -72,7 +69,6 @@ segments:
           - L1-icache-load-misses
 
       - name: l2_llc_caches
-        use_ld_env: false
         events:
           # - l2_cache_req_stat.all
           # - l2_cache_req_stat.ic_dc_miss_in_l2
@@ -170,14 +166,34 @@ segments:
   # --------------------------------------------------------------------------
   startup:
     metrics:
-      - name: linker_cycles
-        type: sum
-        key: ld
+      - name: kernel_time_ms
+        type: stats
+        scale: 0.000001
+        key:  kernel_ns
+
+      - name: ld_time_ms
+        type: stats
+        scale: 0.000001
+        key: ld_ns
+
+      - name: map_time_ms
+        type: stats
+        scale: 0.000001
+        key: map_time_ns
+
+      - name: reloc_time_ms
+        type: stats
+        scale: 0.000001
+        key: reloc_time_ns
 
       - name: startup_time_ms
+        type: stats
+        scale: 0.000001
+        key: startup_time_ns
+
+      - name: startup_time_pct
         type: derived
-        # ld cycles as a fraction of total CPU cycles, scaled to mean wall time
-        formula: (linker_cycles_total / cycles_total) * wall_time_ms_mean
+        formula: startup_time_ms_mean / wall_time_ms_mean
 
   # --------------------------------------------------------------------------
   # thread daemons use psutil to gather metrics, therefore keys must correspond the values in psutil.Process
