@@ -1,14 +1,13 @@
 import json
-import re
 
 from record_types import Record
 from typing import TypeAlias
 
-PerfRecord:    TypeAlias = Record
-LDRecord:      TypeAlias = Record
-ROCMSMIRecord: TypeAlias = dict
+PerfRecord:     TypeAlias = Record
+BpftraceRecord: TypeAlias = Record
+ROCMSMIRecord:  TypeAlias = dict
 
-def parse_cpu_prof_output(perf_output: str, pid: int) -> tuple[PerfRecord, LDRecord]:
+def parse_perf_output(perf_output: str) -> PerfRecord:
     """
     Parses the output produced by perf (and optionally LD)
 
@@ -16,7 +15,6 @@ def parse_cpu_prof_output(perf_output: str, pid: int) -> tuple[PerfRecord, LDRec
     pid is required to capture ld cycles of the process
     """
     perf_json_records = []
-    ld_records        = []
 
     for line in perf_output.splitlines():
         line = line.strip()
@@ -28,13 +26,8 @@ def parse_cpu_prof_output(perf_output: str, pid: int) -> tuple[PerfRecord, LDRec
                 perf_json_records.append(json.loads(line))
             except json.JSONDecodeError:
                 pass
-        elif line.startswith(str(pid)):
-            ld_records.append(line)
 
-    parsed_perf         = parse_perf_json_records(perf_json_records)
-    dynamic_link_cycles = parse_ld_records(ld_records)
-
-    return parsed_perf, dynamic_link_cycles
+    return parse_perf_json_records(perf_json_records)
 
 def parse_perf_json_records(perf_json_records: list[dict]) -> PerfRecord:
     """
@@ -54,17 +47,17 @@ def parse_perf_json_records(perf_json_records: list[dict]) -> PerfRecord:
 
     return metrics
 
-def parse_ld_records(ld_records: list[str]) -> LDRecord:
-    """
-    Extracts total startup time in dynamic loader (ld-cycles) from the ld records
-    """
-    pattern = re.compile(r"total startup time in dynamic loader:\s*(\d+)\s*cycles")
+def parse_bpftrace_output(bpftrace_output: str) -> BpftraceRecord:
+    record = {}
+    try:
+        raw = dict(json.loads(bpftrace_output))
+        for metric_name, metric_value in raw.items():
+            record[metric_name] = metric_value
 
-    for record in reversed(ld_records):
-        match = pattern.search(record)
-        if match:
-            return {'ld': float(match.group(1))}
-    return {}
+    except json.JSONDecodeError:
+        pass
+
+    return record
 
 def parse_rocm_smi_output(rocm_smi_output: str, device_index: int) -> ROCMSMIRecord:
     """

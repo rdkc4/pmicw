@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "Setup [0/7]: Checking required system tools..."
+echo "Setup [0/8]: Checking required system tools..."
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 missing=()
 
@@ -19,6 +21,14 @@ check_command "jq"
 
 python3 -c "import venv" 2>/dev/null || missing+=("python3-venv")
 
+bpftrace_ok=false
+if command -v bpftrace &>/dev/null; then
+    ver=$(bpftrace --version | head -n1 | awk '{print $2}' | sed 's/v//')
+    required="0.26.0"
+
+    dpkg --compare-versions "$ver" ge "$required" && bpftrace_ok=true
+fi
+
 apt_packages=()
 
 for cmd in "${missing[@]}"; do
@@ -32,7 +42,16 @@ for cmd in "${missing[@]}"; do
     esac
 done
 
-echo "Setup [1/7]: Installing required system tools..."
+if [ "$bpftrace_ok" = false ]; then
+    apt_packages+=(
+        "libelf-dev" "clang" "llvm-dev" "libclang-dev" 
+        "libcereal-dev" "dwarves" "git" "cmake"
+        "ninja-build" "libbpf-dev" "zlib1g-dev"
+        "googletest" "libgtest-dev" "libgmock-dev"
+    )
+fi
+
+echo "Setup [1/8]: Installing required system tools..."
 if (( ${#apt_packages[@]} > 0 )); then
     unique_packages=($(echo "${apt_packages[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
     
@@ -47,28 +66,62 @@ else
     echo "All system tools are already installed."
 fi
 
-echo "Setup [2/7]: Creating the virtual environment..."
+echo "Setup [2/8]: Building bpftrace..."
+if [ "$bpftrace_ok" = false ]; then
+    (
+        rm -rf bcc
+        git clone --recursive https://github.com/iovisor/bcc.git
+        
+        mkdir bcc/build && cd bcc/build
+        cmake -DCMAKE_BUILD_TYPE=Release ..
+
+        make -j$(nproc)
+        sudo make install
+    )
+    sudo rm -rf bcc
+    (   
+        rm -rf bpftrace
+        git clone https://github.com/bpftrace/bpftrace.git
+        
+        cd bpftrace
+        git checkout v0.26.0
+        git submodule update --init --recursive
+
+        mkdir build && cd build
+        cmake -DCMAKE_BUILD_TYPE=Release ..
+
+        make -j$(nproc)
+        sudo make install
+
+        sudo ln -sf /usr/local/bin/bpftrace /usr/bin/bpftrace
+    )
+    sudo rm -rf bpftrace
+else
+    echo "bpftrace 0.26+ is already installed"
+fi
+
+echo "Setup [3/8]: Creating the virtual environment..."
 python3 -m venv .venv || { echo "Failed to create venv"; exit 1; }
 
-echo "Setup [3/7]: Upgrading pip..."
+echo "Setup [4/8]: Upgrading pip..."
 .venv/bin/python -m pip install --upgrade pip
 
-echo "Setup [4/7]: Installing dependencies..."
+echo "Setup [5/8]: Installing dependencies..."
 .venv/bin/python -m pip install -r requirements.txt
 
-echo "Setup [5/7]: Making scripts executable..."
+echo "Setup [6/8]: Making scripts executable..."
 chmod +x scripts/*.sh
 chmod +x run.sh
 
-echo "Setup [6/7]: Making Python modules executable..."
+echo "Setup [7/8]: Making Python modules executable..."
 chmod +x src/workload_runner.py
 chmod +x src/comparison_tool.py
 chmod +x workloads/test*
 
-echo "Setup [7/7]: Setup complete"
+echo "Setup [8/8]: Setup complete"
 echo
 echo "To run a workload, use:"
 echo "  $ source .venv/bin/activate"
 echo "  $ ./run.sh [options] <workload> [workload-args...]"
 echo
-echo "  Example: $ ./run.sh -rfmt csv,md,json -m cpu,gpu,memory workload arg1 arg2"
+echo "  Example: $ ./run.sh -cmp 10 -rfmt csv,md,json -vfmt chart,table,graph -m cpu,gpu,memory workload"

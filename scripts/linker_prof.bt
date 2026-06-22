@@ -1,0 +1,202 @@
+#!/usr/bin/env bpftrace
+
+/*
+ * ELF startup profiler using ld.so and kernel lifecycle hooks.
+ * Tracks a process from the initial execve system call through the 
+ * dynamic linker stages up until the handoff to application main().
+*/
+
+/*
+ * Hooks the entry of the execve system call.
+ * Triggers only if the process matches the target child PID (cpid)
+ * and stores the initial timestamp in nanoseconds.
+*/
+tracepoint:syscalls:sys_enter_execve
+{
+    $target = str(args.filename);
+
+    // Ignore if the shell is invoking itself or if it's the initial bash/sh wrapper
+    if ($target != "sh" && $target != "/bin/sh" && $target != "/usr/bin/sh") {
+        @exec_start[pid] = nsecs;
+    }
+}
+
+/*
+ * Hooks the exit of the execve system call.
+ * Calculates the absolute overhead of the kernel-space process 
+ * setup (memory mapping, ELF parsing) before user-space takes over.
+*/
+tracepoint:syscalls:sys_exit_execve
+/comm != "sh"/
+{
+    if (@exec_start[pid]) {
+        @kernel_time[pid] = (int64)nsecs - (int64)@exec_start[pid];
+    }
+}
+
+/*
+ * Hooks the main entry point of the dynamic linker (_dl_start).
+ * Marks the exact moment the runtime linker begins bootstrapping itself.
+*/
+uprobe:/lib64/ld-linux-x86-64.so.2:_dl_start
+{
+    @ld_start[pid] = nsecs;
+}
+
+/*
+ * Entry probe for shared object dependency loading.
+ * Uses Thread ID (tid) to safely track nested or concurrent library loads.
+*/
+uprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
+{
+    $depth = @map_depth[pid, tid];
+
+    @map_enter[pid, tid, $depth] = nsecs;
+    /*
+    @so_lib_name[pid, tid, $depth] = str(arg1);
+    */
+    @map_depth[pid, tid]++;
+}
+
+/*
+ * Return probe for shared object dependency loading.
+ * Increments the total dependency count and accumulates the time 
+ * spent opening and mapping shared libraries (.so files).
+*/
+uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_map_object
+/@map_depth[pid, tid] > 0/
+{
+    @map_depth[pid, tid]--;
+
+    $depth = @map_depth[pid, tid];
+
+    $duration_ns    = (int64)nsecs - (int64)@map_enter[pid, tid, $depth];
+    @map_time[pid] += $duration_ns;
+    @map_count[pid]++;
+
+    /*
+    $name = @so_lib_name[pid, tid, $depth];
+    if ($name != "") {
+        @so_lib_durations[$name] += $duration_ns;
+    }
+    */
+
+    $_ = delete(@map_enter[pid, tid, $depth]);
+    /*
+    $_ = delete(@so_lib_name[pid, tid, $depth]);
+    */
+}
+
+/*
+ * Entry probe for symbol relocation tracking.
+ * Tracks when the linker begins resolving variables and functions.
+*/
+uprobe:/lib64/ld-linux-x86-64.so.2:_dl_relocate_object
+{
+    $depth = @reloc_depth[pid, tid];
+
+    @reloc_enter[pid, tid, $depth] = nsecs;
+    @reloc_depth[pid, tid]++;
+}
+
+/*
+ * Return probe for symbol relocation tracking.
+ * Accumulates the total time spent linking symbol references 
+ * across the application and its loaded libraries.
+*/
+uretprobe:/lib64/ld-linux-x86-64.so.2:_dl_relocate_object
+/@reloc_depth[pid, tid] > 0/
+{
+    @reloc_depth[pid, tid]--;
+
+    $depth = @reloc_depth[pid, tid];
+
+    @reloc_time[pid] += (int64)nsecs - (int64)@reloc_enter[pid, tid, $depth];
+    @reloc_count[pid]++;
+
+    $_ = delete(@reloc_enter[pid, tid, $depth]);
+}
+
+/*
+ * Entry probe for application runtime handoff.
+ * This is the final hook, running right before control goes to main().
+ * to the target process so it acts purely as a startup benchmark tool.
+*/
+uretprobe:/lib64/ld-linux-x86-64.so.2:dl_main
+{
+    $now = nsecs;
+
+    @startup[pid]  = 0;
+    @ld_total[pid] = 0;
+
+    if (@exec_start[pid]) {
+        @startup[pid] = (int64)$now - (int64)@exec_start[pid];
+    }
+
+    if (@ld_start[pid]) {
+        @ld_total[pid] = (int64)$now - (int64)@ld_start[pid];
+    }
+
+    printf("{\"kernel_ns\": %ld, \"ld_ns\": %ld, \"map_count\": %ld, \"map_time_ns\": %ld, \"reloc_count\": %ld, \"reloc_time_ns\": %ld, \"startup_time_ns\": %ld",
+        @kernel_time[pid],
+        @ld_total[pid],
+        
+        @map_count[pid],
+        @map_time[pid],
+        
+        @reloc_count[pid],
+        @reloc_time[pid],
+        
+        @startup[pid]
+    );
+
+    /*
+    $is_first_so = 1;
+    printf("\"so_libs\": {");
+    
+    for ($kv : @so_lib_durations) {
+        if ($is_first_so == 1) {
+            printf("\"%s\": %ld", $kv.0, $kv.1);
+            $is_first_so = 0;
+        } else {
+            printf(", \"%s\": %ld", $kv.0, $kv.1);
+        }
+    }
+    printf("}");
+    */
+    
+    printf("}");
+
+    exit();
+}
+
+/*
+ * Script teardown probe.
+ * Executes when the bpftrace script exits. 
+ * It aggregates metrics, prints structured JSON, and exits.
+ * Cleans up all global maps from kernel memory to prevent leaks.
+*/
+END
+{
+    clear(@exec_start);
+    clear(@kernel_time);
+    clear(@ld_start);
+    clear(@ld_total);
+
+    clear(@map_enter);
+    clear(@map_time);
+    clear(@map_count);
+    clear(@map_depth);
+
+    /*
+    clear(@so_lib_name);
+    clear(@so_lib_durations);
+    */
+
+    clear(@reloc_enter);
+    clear(@reloc_time);
+    clear(@reloc_count);
+    clear(@reloc_depth);
+
+    clear(@startup)
+}

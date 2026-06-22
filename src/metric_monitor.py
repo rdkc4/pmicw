@@ -6,9 +6,9 @@ import time
 from typing import Callable
 import psutil
 
-from command_config import RocmSMICommandConfig
+from command_config import BPFTraceStartupCommandConfig, CommandConfig, RocmSMICommandConfig
 from metric_config import ProfilerConfig, SegmentConfig, Segments
-from record_parser import parse_rocm_smi_output
+from record_parser import parse_bpftrace_output, parse_rocm_smi_output
 from record_types import Record, RecordList
 from workload_context import WorkloadContext
 
@@ -18,17 +18,20 @@ class MonitorSpecification:
     Specifies the target of the monitor,
     and if monitor requires a process id to sample data
     """
-    target:    Callable
-    needs_pid: bool
+    target:       Callable
+    req_cfg:      bool
+    req_pid:      bool
+    req_interval: bool
 
 def get_monitors() -> dict[Segments, MonitorSpecification]:
     return {
-        Segments.THREAD: MonitorSpecification(target = monitor_process_threads, needs_pid = True),
-        Segments.MEMORY: MonitorSpecification(target = monitor_process_memory,  needs_pid = True),
-        Segments.GPU:    MonitorSpecification(target = monitor_amd_gpu,         needs_pid = False)
+        Segments.THREAD:  MonitorSpecification(target = monitor_process_threads, req_cfg = True,  req_pid = True,  req_interval = True),
+        Segments.MEMORY:  MonitorSpecification(target = monitor_process_memory,  req_cfg = True,  req_pid = True,  req_interval = True),
+        Segments.GPU:     MonitorSpecification(target = monitor_amd_gpu,         req_cfg = True,  req_pid = False, req_interval = True),
+        Segments.STARTUP: MonitorSpecification(target = monitor_process_startup, req_cfg = False, req_pid = True,  req_interval = False)
     }
 
-def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig, cmd_cfg: RocmSMICommandConfig) -> None:
+def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig, cmd_cfg: CommandConfig) -> None:
     """
     Entry point for monitoring
 
@@ -49,18 +52,30 @@ def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig, cmd_cfg: RocmSMI
             print(f"Segment '{segment}' not found in config", file = sys.stderr)
             continue
 
-        args = [
-            ctx.monitors.activity_event,
-            ctx.monitors.shutdown_event,
-            ctx.records[segment],
-            cfg_segment,
-            ctx.monitors.interval,
-        ]
+        # orchestration events
+        args: list = [ctx.monitors.activity_event, ctx.monitors.shutdown_event]
 
+        # records
+        args.append(ctx.records[segment])
+
+
+        # requires configuration
+        if monitor.req_cfg:
+            args.append(cfg_segment)
+
+        # requires interval
+        if monitor.req_interval:
+            args.append(ctx.monitors.interval)
+
+        # commands
         if segment == Segments.GPU:
-            args.append(cmd_cfg)
+            args.append(cmd_cfg.rocm_smi)
 
-        if monitor.needs_pid:
+        if segment == Segments.STARTUP:
+            args.append(cmd_cfg.bpftrace_startup)
+
+        # required process id
+        if monitor.req_pid:
             args.append(ctx.monitors.active_pid)
 
         spawn_monitor_daemon(
@@ -89,6 +104,49 @@ def spawn_monitor_daemon(
 
     daemons.append(daemon)
     daemon.start()
+
+def monitor_process_startup(
+    activity_event:  threading.Event,
+    shutdown_event:  threading.Event,
+    startup_records: RecordList,
+    cmd:             BPFTraceStartupCommandConfig,
+    active_pid_ref:  list[int]
+) -> None:
+    """
+    Monitors startup cleanly across an infinite number of iterations
+    without busy-spinning or state-locking.
+    """
+    while not shutdown_event.is_set():
+        activity_event.wait()
+
+        if shutdown_event.is_set():
+            break
+
+        try:
+            active_pid = active_pid_ref[0]
+            if active_pid > 0:
+                command = cmd.base_command + [cmd.pid_flag, str(active_pid), cmd.script]
+
+                proc = subprocess.Popen(
+                    command,
+                    stdout = subprocess.PIPE,
+                    stderr = subprocess.PIPE,
+                    text   = True
+                )
+
+                stdout, _ = proc.communicate()
+                
+                record = parse_bpftrace_output(stdout.strip())
+                if record:
+                    startup_records.append(record)
+
+        except Exception as e:
+            print(f"Monitor startup error: {e}", file = sys.stderr)
+        
+        while activity_event.is_set() and not shutdown_event.is_set():
+            time.sleep(0.01)
+
+    return
 
 def monitor_process_threads(
     activity_event: threading.Event,
@@ -124,13 +182,9 @@ def monitor_process_threads(
             try:
                 active_pid = active_pid_ref[0]
                 if active_pid > 0:
-                    root_proc = psutil.Process(active_pid)
+                    proc   = psutil.Process(active_pid)
 
-                    children = root_proc.children(recursive = True)
-                    target_proc = children[0] if children else root_proc
-
-                    record = sample_values(target_proc.as_dict(), events)
-
+                    record = sample_values(proc.as_dict(), events)
                     if record:
                         thread_records.append(record)
 
@@ -174,11 +228,9 @@ def monitor_process_memory(
             try:
                 active_pid = active_pid_ref[0]
                 if active_pid > 0:
-                    root_proc   = psutil.Process(active_pid)
-                    children    = root_proc.children(recursive = True)
-                    target_proc = children[0] if children else root_proc
-                    
-                    memory = target_proc.memory_full_info()
+                    proc   = psutil.Process(active_pid)
+                    memory = proc.memory_full_info()
+
                     record = sample_values(memory._asdict(), events)
                     if record:
                         memory_records.append(record)
@@ -246,7 +298,10 @@ def sample_values(records: dict, metrics: list[str]) -> Record:
     for metric in metrics:
         if records.get(metric, None) != None:
             try:
-                record[metric] = float(records[metric])
+                value = float(records[metric])
+                if value > 0:
+                    record[metric] = value
+
             except:
                 pass
 

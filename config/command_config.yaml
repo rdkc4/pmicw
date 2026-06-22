@@ -2,6 +2,11 @@
 # Defines env variables required by ld
 # Do not remove `-j` flag from perf's base command
 # Do not remove `--json` flag from rocm-smi's base command
+#
+# Warning:
+#  - bpftrace requires sudo
+#  - open `sudo visudo`
+#  - append `your_username ALL=(ALL) NOPASSWD: /usr/local/bin/bpftrace`
 
 commands:
   rocm_smi:
@@ -20,6 +25,17 @@ commands:
       - "-j"
       - "-e"
 
-  ld_environment:
-    LD_DEBUG: "statistics"
-    LD_BIND_NOW: "1"
+  bash_command_wrapper:
+    base_command:
+      - "sh"
+      - "-c"
+      - 'kill -STOP $$; exec "$@"'
+      - "--"
+
+  bpftrace_startup:
+    base_command:
+      - "sudo"
+      - "bpftrace"
+      - "-q"
+    pid_flag: "-p"
+    script: "scripts/linker_prof.bt"

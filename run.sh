@@ -114,6 +114,9 @@ log_host_posture "BEFORE"
 # pre-conditioning (root)
 sudo bash "$PRE" "$STATE_FILE"
 
+echo "[bench] Warming bpftrace into memory..."
+sudo bpftrace -e 'BEGIN { exit(); }' >/dev/null 2>&1
+
 RUNNER_COMMAND=("$RUNNER")
 COMPARISON_COMMAND=("$COMPARISON")
 

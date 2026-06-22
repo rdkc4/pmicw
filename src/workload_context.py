@@ -18,6 +18,7 @@ class WorkloadMetricSelection:
     gpu:       bool
     memory:    bool
     thread:    bool
+    startup:   bool
 
 @dataclass
 class WorkloadContext:
