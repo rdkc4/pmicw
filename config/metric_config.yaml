@@ -74,8 +74,10 @@ segments:
       - name: l2_llc_caches
         use_ld_env: false
         events:
-          - l2_cache_req_stat.all
-          - l2_cache_req_stat.ic_dc_miss_in_l2
+          # - l2_cache_req_stat.all
+          # - l2_cache_req_stat.ic_dc_miss_in_l2
+          - l2_request.all
+          - l2_request.miss
           - cache-references
           - cache-misses
 
@@ -112,8 +114,8 @@ segments:
 
       - name: l2_miss_rate_pct
         type: ratio
-        numerator: l2_cache_req_stat.ic_dc_miss_in_l2
-        denominator: l2_cache_req_stat.all
+        numerator: l2_request.miss
+        denominator: l2_request.all
         totals: [numerator, denominator]
 
       - name: llc_miss_rate_pct
@@ -123,7 +125,7 @@ segments:
         totals: [numerator, denominator]
 
   # --------------------------------------------------------------------------
-  # GPU daemon uses rocm-smi to gather metrics, therefor keys must correspond to what rocm-smi outputs in JSON format
+  # GPU daemon uses rocm-smi to gather metrics, therefore keys must correspond to what rocm-smi outputs in JSON format
   gpu:
     metrics:
       - name: gpu_activity_pct
@@ -135,7 +137,7 @@ segments:
         key: "GPU Memory Allocated (VRAM%)"
 
   # --------------------------------------------------------------------------
-  # memory daemons use psutil to gather metrics, therefor keys must correspond the values in psutil._ntp.pfullmem
+  # memory daemons use psutil to gather metrics, therefore keys must correspond the values in psutil._ntp.pfullmem
   # note: if key doesn't correspond any field in psutil._ntp.pfullmem, it will try to fallback to other metric (e.g. page-faults falls back to perf)
   #       if fallback fails, values will be set to zeroes
   memory:
@@ -178,7 +180,7 @@ segments:
         formula: (linker_cycles_total / cycles_total) * wall_time_ms_mean
 
   # --------------------------------------------------------------------------
-  # thread daemons use psutil to gather metrics, therefor keys must correspond the values in psutil.Process
+  # thread daemons use psutil to gather metrics, therefore keys must correspond the values in psutil.Process
   # note: if key doesn't correspond any field in psutil.Process, it will try to fallback to other metric (e.g. context-switches falls back to perf)
   #       if fallback fails, values will be set to zeroes
   thread:

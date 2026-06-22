@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from argparse import Namespace
+import argparse
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+import sys
 import yaml
+
+from threshold_config_generator import get_yaml_path
 
 # list of all suffixes a metric can have
 SUFFIXES = ["_total", "_mean", "_median", "_stddev", "_min", "_max"]
@@ -23,14 +28,25 @@ class ThresholdConfig:
     improvement_threshold_pct: float     = 0.0               # improvement boundary, defines when improvement is reached (depending on direction)
     regression_threshold_pct:  float     = 0.0               # regression boundary, defines when regression is reached (depending on direction)
 
-def load_thresholds_config(yaml_path: Path | str) -> dict[str, ThresholdConfig]:
+def load_thresholds_config(args: argparse.Namespace, yaml_path) -> dict[str, ThresholdConfig]:
     """
-    Loads the yaml threshold configuration
+    Loads the yaml threshold configuration, according to CLI
 
-    yaml_path: path to a yaml configuration
+    args: parsed CLI arguments
+
+    yaml_path: path to a static (fallback) yaml configuration
 
     Returns dictionary of metrics (suffix included) mapped to their threshold configurations
     """
+
+    dynamic_path = args.use_computed_thresholds
+    if dynamic_path:
+        if dynamic_path == 'default':
+            #if no path is provided to -uct, --use-computed-thresholds, gets configuration corresponding to its csv name
+            dynamic_path = get_yaml_path(Path(args.path).name)
+        if Path(dynamic_path).is_file():
+            yaml_path = dynamic_path
+
     with open(yaml_path, "r", encoding = "utf-8") as f:
         raw_data = yaml.safe_load(f) or {}
 
