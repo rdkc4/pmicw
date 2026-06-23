@@ -37,7 +37,7 @@ def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig, cmd_cfg: Command
 
     ctx:     context of the workload\n
     cfg:     metric configuration
-    cmd_cfg: command configuration (for rocm-smi)
+    cmd_cfg: command configuration (rocm-smi and bpftrace)
 
     Starts monitors of the selected segments (memory, thread, gpu)
     """
@@ -57,7 +57,6 @@ def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig, cmd_cfg: Command
 
         # records
         args.append(ctx.records[segment])
-
 
         # requires configuration
         if monitor.req_cfg:
