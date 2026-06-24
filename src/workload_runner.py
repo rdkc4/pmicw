@@ -48,6 +48,7 @@ from measurement import Measurement, Metadata, Metrics, Workload
 from metric_computer import compute_records
 from metric_monitor import start_monitoring
 from metric_config import ProfilerConfig, Segments, load_config
+from paths import CMP_THRESHOLD_CONFIG, COMMAND_CONFIG, METRIC_CONFIG
 from record_parser import parse_perf_output
 from csv_writer import write
 from threshold_config_generator import compute_thresholds
@@ -243,8 +244,8 @@ def assemble_measurement(workload: Workload, metrics: dict[str, Metrics], cfg: P
 
 def main():
     args     = parse_runner_args()
-    cfg      = load_config("config/metric_config.yaml")
-    cmd_cfg  = load_command_config("config/command_config.yaml")
+    cfg      = load_config(METRIC_CONFIG)
+    cmd_cfg  = load_command_config(COMMAND_CONFIG)
     ctx      = setup_workload_context(args)
     workload = assemble_workload(args)
 
@@ -261,7 +262,7 @@ def main():
     if not path:
         sys.exit(1)
 
-    compute_thresholds(args, "config/comparison_threshold_config.yaml", measurement)
+    compute_thresholds(args.compute_thresholds, CMP_THRESHOLD_CONFIG, measurement)
         
     result = RunnerResult(str(measurement.metadata.run_id), measurement.workload.name, str(path))
     print(result.to_json(), file = sys.stdout)

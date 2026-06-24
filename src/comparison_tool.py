@@ -10,6 +10,7 @@ from comparison_context import ComparisonDataFrames, ComparisonReportGroups, Com
 from dashboard_generator import generate_dashboard
 from deltas_computer import compute_deltas
 from measurement_query import execute_query, fetch_last_n, fetch_two
+from paths import CMP_THRESHOLD_CONFIG, PLOT_CONFIG
 from plot_config import PlotGroupConfig, load_plot_config
 from report_visualizer import visualize_report
 from report_writer import write_report
@@ -150,8 +151,8 @@ def visualize(
 
 def main() -> None:
     args          = parse_comparison_args()
-    threshold_cfg = load_thresholds_config(args, "config/comparison_threshold_config.yaml")
-    plot_cfg      = load_plot_config("config/plot_config.yaml")
+    threshold_cfg = load_thresholds_config(args, CMP_THRESHOLD_CONFIG)
+    plot_cfg      = load_plot_config(PLOT_CONFIG)
     cmp_dfs       = compare(args, threshold_cfg)
 
     report_groups = report(cmp_dfs, args)

@@ -5,7 +5,6 @@ import argparse
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-import sys
 import yaml
 
 from threshold_config_generator import get_yaml_path
@@ -28,7 +27,7 @@ class ThresholdConfig:
     improvement_threshold_pct: float     = 0.0               # improvement boundary, defines when improvement is reached (depending on direction)
     regression_threshold_pct:  float     = 0.0               # regression boundary, defines when regression is reached (depending on direction)
 
-def load_thresholds_config(args: argparse.Namespace, yaml_path) -> dict[str, ThresholdConfig]:
+def load_thresholds_config(args: argparse.Namespace, yaml_path: Path | str) -> dict[str, ThresholdConfig]:
     """
     Loads the yaml threshold configuration, according to CLI
 
@@ -44,6 +43,7 @@ def load_thresholds_config(args: argparse.Namespace, yaml_path) -> dict[str, Thr
         if dynamic_path == 'default':
             #if no path is provided to -uct, --use-computed-thresholds, gets configuration corresponding to its csv name
             dynamic_path = get_yaml_path(Path(args.path).name)
+
         if Path(dynamic_path).is_file():
             yaml_path = dynamic_path
 

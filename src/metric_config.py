@@ -19,6 +19,7 @@ Each segment has a list of metric definitions.  Four types are supported:
 from __future__ import annotations
 
 import ast
+from pathlib import Path
 import re
 from dataclasses import dataclass, field
 from typing import Literal
@@ -111,8 +112,8 @@ class PerfGroup:
     """
     Group of perf events, loaded from metric config
     """
-    name:       str
-    events:     list[str]
+    name:   str
+    events: list[str]
 
 @dataclass
 class SegmentConfig:
@@ -181,7 +182,7 @@ class ProfilerConfig:
 
 SAFE_BUILTINS = {"abs", "round", "min", "max", "sum"}
 
-def load_config(path: str = "metrics.yaml") -> ProfilerConfig:
+def load_config(path: Path | str) -> ProfilerConfig:
     """
     Loads metric configuration into a profiler config
 

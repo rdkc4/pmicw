@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field, fields
 import os
+from pathlib import Path
 import sys
 import yaml
 
@@ -31,7 +32,7 @@ class CommandConfig:
     bash_wrapper:     BashCommandWrapperConfig     = field(default_factory = BashCommandWrapperConfig)
     bpftrace_startup: BPFTraceStartupCommandConfig = field(default_factory = BPFTraceStartupCommandConfig)
 
-def load_command_config(config_path = "config/command_config.yaml"):
+def load_command_config(config_path: Path | str):
     if not os.path.exists(config_path):
         print(f"Warning: {config_path} not found. Utilizing baseline defaults.", file = sys.stderr)
         return CommandConfig()

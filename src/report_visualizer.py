@@ -49,10 +49,10 @@ def visualize_report(
         if visual_df.empty:
             continue
         
-        visuals    = ComparisonVisuals(
-            table  = visualize_table(visual_df) if VisualFormatOptions.TABLE in visual_formats else None,
-            chart  = visualize_chart(visual_df) if VisualFormatOptions.CHART in visual_formats else None,
-            graph  = visualize_graph(visual_df) if VisualFormatOptions.GRAPH in visual_formats else None
+        visuals   = ComparisonVisuals(
+            table = visualize_table(visual_df) if VisualFormatOptions.TABLE in visual_formats else None,
+            chart = visualize_chart(visual_df) if VisualFormatOptions.CHART in visual_formats else None,
+            graph = visualize_graph(visual_df) if VisualFormatOptions.GRAPH in visual_formats else None
         )
         tabs_data[group_name] = visuals
     

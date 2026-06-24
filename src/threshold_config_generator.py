@@ -1,11 +1,9 @@
-import argparse
 from pathlib import Path
 import yaml
 
 from csv_writer import ensure_dir, repo_to_filename
-from measurement import Measurement, Metrics
+from measurement import Measurement
 from paths import THRESHOLDS_DIR
-
 
 def remove_suffix(name: str, stats_metrics: set) -> None:
     if name.endswith("_stddev"):
@@ -14,11 +12,11 @@ def remove_suffix(name: str, stats_metrics: set) -> None:
 
 def get_yaml_path(csv_filename: str)-> Path:
     filename = csv_filename.replace(".csv", ".yaml")
-    path = THRESHOLDS_DIR / filename
+    path     = THRESHOLDS_DIR / filename
     ensure_dir(THRESHOLDS_DIR / filename)
     return path
 
-def compute_thresholds(args: argparse.Namespace, yaml_path: Path | str, measurement: Measurement) -> None:
+def compute_thresholds(z_score: int, yaml_path: Path | str, measurement: Measurement) -> None:
     """
     If enabled in CLI, computes dynamic noise floor, improvement and regression thresholds based on running workload\n
 
@@ -29,34 +27,33 @@ def compute_thresholds(args: argparse.Namespace, yaml_path: Path | str, measurem
     Stores .yaml threshold configuration file in config/thresholds/ using .csv file naming schema
     """
 
-    if not args.compute_thresholds:
+    if z_score == 0:
         return
-    
-    #number of standard deviations considered as noise
-    z_score = args.compute_thresholds
     
     with open(yaml_path, "r+") as file:
         data = yaml.safe_load(file) or {}
-    data.setdefault("workload", {})["name"] = measurement.workload.name
+    data.setdefault("workload", {})["name"]       = measurement.workload.name
     data.setdefault("workload", {})["iterations"] = measurement.workload.iterations
-    data.setdefault("workload", {})["run_id"] = str(measurement.metadata.run_id)
+    data.setdefault("workload", {})["run_id"]     = str(measurement.metadata.run_id)
 
     for seg_name, seg_metrics in measurement.metrics.items(): 
         stats_metrics = set()
-        for full_metric_name, metric_value in seg_metrics.record.items():
+        for full_metric_name in seg_metrics.record.keys():
             remove_suffix(full_metric_name, stats_metrics)
 
         for metric_name in stats_metrics:
-            stddev = measurement.metrics[seg_name].record.get(f"{metric_name}_stddev", -1.0)
-            mean = measurement.metrics[seg_name].record.get(f"{metric_name}_mean", -1.0)
+            stddev    = measurement.metrics[seg_name].record.get(f"{metric_name}_stddev", -1.0)
+            mean      = measurement.metrics[seg_name].record.get(f"{metric_name}_mean", -1.0)
             coeff_var = stddev/mean if mean > 0 else -1 #coefficient of variation
+            
             if metric_name not in data.get("thresholds", {}):
                 data.setdefault("thresholds", {})[metric_name] = {}
+            
             if coeff_var >= 0:
                 #adjacent ranges, same threshold pct
-                data["thresholds"][metric_name]["noise_floor_pct"] = z_score * coeff_var * 100
+                data["thresholds"][metric_name]["noise_floor_pct"]           = z_score * coeff_var * 100
                 data["thresholds"][metric_name]["improvement_threshold_pct"] = z_score * coeff_var * 100
-                data["thresholds"][metric_name]["regression_threshold_pct"] = z_score * coeff_var * 100    
+                data["thresholds"][metric_name]["regression_threshold_pct"]  = z_score * coeff_var * 100    
 
     csv_filename = repo_to_filename(
         measurement.metadata.version.repository, 
@@ -67,5 +64,4 @@ def compute_thresholds(args: argparse.Namespace, yaml_path: Path | str, measurem
     path = get_yaml_path(csv_filename)
 
     with open(f"{path}", "w") as file:
-        yaml.safe_dump(data, file, default_flow_style=False)
-    return
+        yaml.safe_dump(data, file, default_flow_style = False)
