@@ -1,0 +1,157 @@
+#!/usr/bin/env bpftrace
+
+#define RUNNABLE  0
+#define SWAPPING  1
+#define SLEEPING  2
+#define LOCK      3
+#define IDLE      4
+#define EXECUTING 5
+
+macro JSON_PREFIX($first) {
+    if ($first == 0) {
+        printf(", ");
+    }
+}
+
+macro JSON_TSA($kv, $first) {
+    JSON_PREFIX($first);
+    printf("{\"tid\": %ld, \"state\": %d, \"duration_ns\": %lld}", $kv.0.0, (int32)$kv.0.1, (int64)$kv.1);
+}
+
+macro JSON_THREAD_LIFETIME($kv, $first) {
+    JSON_PREFIX($first);
+    printf("{\"tid\": %ld, \"start\": %llu, \"end\": %llu}", $kv.0.0, $kv.0.1, $kv.1);
+}
+
+tracepoint:sched:sched_process_fork 
+/pid == args.parent_pid/
+{
+    $child_tid               = args.child_pid; 
+    @tstart_time[$child_tid] = nsecs;
+    @tracked_tid[$child_tid] = 1;
+}
+
+tracepoint:sched:sched_process_exit
+/pid == curtask->group_leader->tgid/
+{
+    if (@tstart_time[tid] != 0) {
+        @tlifetime[tid, @tstart_time[tid]] = nsecs;
+        $_ = delete(@tstart_time[tid]);
+    }
+
+    $_ = delete(@tracked_tid[tid]);
+}
+
+tracepoint:sched:sched_switch 
+{
+    $now         = nsecs;
+    $current_tid = tid;
+
+    // current thread is going off-cpu
+    if (pid == curtask->group_leader->tgid) {
+        @offcpu_start[$current_tid] = $now;
+        @raw_state[$current_tid]    = args.prev_state;
+        @tracked_tid[$current_tid]  = 1;
+    }
+
+    // next thread going on-cpu
+    $next_tid = args.next_pid;
+    
+    if (@tracked_tid[$next_tid] == 1) {
+        @oncpu_start[$next_tid] = $now;
+
+        if (@offcpu_start[$next_tid] != 0) {
+            $elapsed_ns = (int64)$now - (int64)@offcpu_start[$next_tid];
+            $state      = @raw_state[$next_tid];
+
+            if ($state == RUNNABLE) {
+                if (@is_paging[$next_tid] == 0) {
+                    @thread_tsa[$next_tid, RUNNABLE] = sum($elapsed_ns);
+
+                } else {
+                    @thread_tsa[$next_tid, SWAPPING] = sum($elapsed_ns);
+                    @is_paging[$next_tid]            = 0;
+                }
+            }
+
+            else if ($state == 1 || $state == 2) {
+                if (@is_locked[$next_tid] == 1) {
+                    @thread_tsa[$next_tid, LOCK] = sum($elapsed_ns);
+                    @is_locked[$next_tid]        = 0;
+
+                } else if (@is_idle[$next_tid] == 1) {
+                    @thread_tsa[$next_tid, IDLE] = sum($elapsed_ns);
+
+                } else {
+                    @thread_tsa[$next_tid, SLEEPING] = sum($elapsed_ns);
+                }
+            }
+
+            $_ = delete(@offcpu_start[$next_tid]);
+            $_ = delete(@raw_state[$next_tid]);
+        }
+    }
+
+    if (pid == curtask->group_leader->tgid && @oncpu_start[$current_tid] != 0) {
+        $cpu_time_ns                         = (int64)$now - (int64)@oncpu_start[$current_tid];
+        @thread_tsa[$current_tid, EXECUTING] = sum($cpu_time_ns);
+
+        $_ = delete(@oncpu_start[$current_tid]);
+    }
+}
+
+tracepoint:exceptions:page_fault_user
+/pid == curtask->group_leader->tgid/
+{
+    @is_paging[tid] = 1;
+}
+
+tracepoint:syscalls:sys_enter_futex
+/pid == curtask->group_leader->tgid/
+{
+    @is_locked[tid] = 1; 
+
+}
+
+tracepoint:syscalls:sys_enter_epoll_wait, 
+tracepoint:syscalls:sys_enter_poll 
+/pid == curtask->group_leader->tgid/
+{ 
+    @is_idle[tid] = 1;
+}
+
+tracepoint:syscalls:sys_exit_epoll_wait, 
+tracepoint:syscalls:sys_exit_poll 
+/pid == curtask->group_leader->tgid/
+{
+    @is_idle[tid] = 0;
+}
+
+END
+{
+    $first = 1;
+    printf("{\"thread_lifetimes\": [");
+    for ($kv : @tlifetime) {
+        JSON_THREAD_LIFETIME($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"thread_tsa\": [");
+    for ($kv : @thread_tsa) {
+        JSON_TSA($kv, $first);
+        $first = 0;
+    }
+    printf("]}");
+
+    clear(@is_idle);
+    clear(@is_locked);
+    clear(@is_paging);
+    clear(@thread_tsa);
+    clear(@oncpu_start);
+    clear(@offcpu_start);
+    clear(@tstart_time);
+    clear(@tlifetime);
+    clear(@raw_state);
+    clear(@tracked_tid);
+}
