@@ -20,7 +20,7 @@ def compute_thresholds(z_score: int, yaml_path: Path | str, measurement: Measure
     """
     If enabled in CLI, computes dynamic noise floor, improvement and regression thresholds based on running workload\n
 
-    args: parsed CLI arguments\n
+    z_score: number of standard deviations from the mean considered as noise\n
     yaml_path: path to static threshold config file, used for metric directions and fallbacks for metrics not collecting stddev\n
     measurement: collected measurement from workload runner
 
