@@ -5,7 +5,7 @@ show_help() {
     echo "Usage: $0 [options] <workload> [workload-args...]"
     echo ""
     echo "[options]:"
-    echo "  -m,    --metric <m>                     Gathered metrics (cpu,gpu,memory,thread)"
+    echo "  -m,    --metric <m>                     Gathered metrics (cpu,gpu,memory,thread,startup,all)"
     echo "  -it,   --iteration <n>                  Number of iterations for workload to run"
     echo "  -wit,  --warmup-iteration               Number of warmup iterations for workload to run"
     echo "  -ct,   --compute-thresholds <n>         Compute thresholds based on workload, using 'n' as z-score"
@@ -13,8 +13,8 @@ show_help() {
     echo "  -cmp2, --compare-two <a> <b>            Compare two explicit run IDs"
     echo "  -cmpw, --compare-with <id>              Compare current run against a specific baseline ID"
     echo "  -uct,  --use-computed-thresholds <path> Use computed thresholds in comparisons, path optional"
-    echo "  -rfmt, --report-format <f>              Format for analysis output (csv,json,md)"
-    echo "  -vfmt, --visual-format <v>              Visualization type (table,chart,graph)"
+    echo "  -rfmt, --report-format <f>              Format for analysis output (csv,json,md,all)"
+    echo "  -vfmt, --visual-format <v>              Visualization type (table,chart,graph,all)"
     echo ""
     exit 0
 }
