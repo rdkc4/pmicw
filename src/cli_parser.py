@@ -21,7 +21,7 @@ Core Structural Rules:
     - `-m`, `--metric` - list of metrics separated by comma
                        - options: wall-time, cpu, gpu, memory, thread, startup
                        - default: wall-time (always included)
-                       - usage: [--metric wall-time,cpu,gpu,memory,thread,startup]
+                       - usage: [--metric wall-time,cpu,gpu,memory,thread,startup,all]
 
     - `-wit`, `--warmup-iteration` - number of warmup iterations workload should run
                                    - default: 0
@@ -74,13 +74,13 @@ Core Structural Rules:
                                  - format in which comparison data should be reported
                                  - options: csv, json, md 
                                  - default: csv
-                                 - usage: [--report-format csv,json,md]
+                                 - usage: [--report-format csv,json,md,all]
 
     - `-vfmt`, `--visual-format` - list of visual formats separated by comma
                                  - format in which the comparison data should be displayed
                                  - options: table, chart, graph
                                  - default: graph
-                                 - usage [--visual-format table,chart,graph]
+                                 - usage [--visual-format table,chart,graph,all]
     
     - `-help`, `--help` - shows help message and exits
 """
@@ -216,6 +216,8 @@ def parse_metrics(metrics_str: str) -> MetricSelection:
     Returns list of selected metric options
     """
     metrics = [metric.strip() for metric in metrics_str.split(',')]
+    if 'all' in metrics:
+        return list(MetricOptions)
 
     invalid = set(metrics) - set(MetricOptions)
     if invalid:
@@ -332,7 +334,9 @@ def parse_report_formats(formats_str: str) -> ReportFormats:
     Returns list of selected report formats
     """
     formats = [fmt.strip() for fmt in formats_str.split(',')]
-
+    if 'all' in formats:
+        return list(ReportFormatOptions)
+    
     invalid = set(formats) - set(ReportFormatOptions)
     if invalid:
         raise argparse.ArgumentTypeError(f'invalid report formats: {", ".join(sorted(invalid))}')
@@ -349,7 +353,9 @@ def parse_visual_formats(formats_str: str) -> VisualFormats:
     Returns list of selected visual formats
     """
     formats = [fmt.strip() for fmt in formats_str.split(',')]
-
+    if 'all' in formats:
+        return list(VisualFormatOptions)
+    
     invalid = set(formats) - set(VisualFormatOptions)
     if invalid:
         raise argparse.ArgumentTypeError(f'invalid visual formats: {", ".join(sorted(invalid))}')
