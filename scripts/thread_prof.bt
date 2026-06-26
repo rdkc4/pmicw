@@ -7,6 +7,9 @@
 #define IDLE      4
 #define EXECUTING 5
 
+#define INTERRUPTIBLE   1
+#define UNINTERRUPTIBLE 2
+
 macro JSON_PREFIX($first) {
     if ($first == 0) {
         printf(", ");
@@ -60,29 +63,34 @@ tracepoint:sched:sched_switch
     if (@tracked_tid[$next_tid] == 1) {
         @oncpu_start[$next_tid] = $now;
 
+        // if process was previously waiting
         if (@offcpu_start[$next_tid] != 0) {
             $elapsed_ns = (int64)$now - (int64)@offcpu_start[$next_tid];
             $state      = @raw_state[$next_tid];
 
             if ($state == RUNNABLE) {
-                if (@is_paging[$next_tid] == 0) {
-                    @thread_tsa[$next_tid, RUNNABLE] = sum($elapsed_ns);
-
-                } else {
+                if (@is_paging[$next_tid] == 1) {
                     @thread_tsa[$next_tid, SWAPPING] = sum($elapsed_ns);
                     @is_paging[$next_tid]            = 0;
+
+                }
+                else {
+                    // time spent waiting for cpu slot
+                    @thread_tsa[$next_tid, RUNNABLE] = sum($elapsed_ns);
                 }
             }
 
-            else if ($state == 1 || $state == 2) {
+            else if ($state == INTERRUPTIBLE || $state == UNINTERRUPTIBLE) {
                 if (@is_locked[$next_tid] == 1) {
                     @thread_tsa[$next_tid, LOCK] = sum($elapsed_ns);
                     @is_locked[$next_tid]        = 0;
 
-                } else if (@is_idle[$next_tid] == 1) {
+                } 
+                else if (@is_idle[$next_tid] == 1) {
                     @thread_tsa[$next_tid, IDLE] = sum($elapsed_ns);
 
-                } else {
+                } 
+                else {
                     @thread_tsa[$next_tid, SLEEPING] = sum($elapsed_ns);
                 }
             }
@@ -144,14 +152,17 @@ END
     }
     printf("]}");
 
+    clear(@tracked_tid);
+
     clear(@is_idle);
     clear(@is_locked);
     clear(@is_paging);
-    clear(@thread_tsa);
-    clear(@oncpu_start);
-    clear(@offcpu_start);
+
     clear(@tstart_time);
     clear(@tlifetime);
+    clear(@thread_tsa);
+    
+    clear(@oncpu_start);
+    clear(@offcpu_start);
     clear(@raw_state);
-    clear(@tracked_tid);
 }
