@@ -19,6 +19,7 @@ class WorkloadMetricSelection:
     memory:    bool
     thread:    bool
     startup:   bool
+    tsa:       bool
 
 @dataclass
 class WorkloadContext:

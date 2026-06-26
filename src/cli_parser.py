@@ -21,7 +21,7 @@ Core Structural Rules:
     - `-m`, `--metric` - list of metrics separated by comma
                        - options: wall-time, cpu, gpu, memory, thread, startup
                        - default: wall-time (always included)
-                       - usage: [--metric wall-time,cpu,gpu,memory,thread,startup,all]
+                       - usage: [--metric wall-time,cpu,gpu,memory,thread,startup,tsa,all]
 
     - `-wit`, `--warmup-iteration` - number of warmup iterations workload should run
                                    - default: 0
@@ -99,6 +99,7 @@ class MetricOptions(StrEnum):
     MEMORY    = 'memory'
     THREAD    = 'thread'
     STARTUP   = 'startup'
+    TSA       = 'tsa'
 
 class ReportFormatOptions(StrEnum):
     """

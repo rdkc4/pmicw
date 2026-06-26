@@ -6,9 +6,9 @@ import time
 from typing import Callable
 import psutil
 
-from command_config import BPFTraceStartupCommandConfig, CommandConfig, RocmSMICommandConfig
+from command_config import BPFTraceStartupCommandConfig, BPFTraceTSACommandConfig, CommandConfig, RocmSMICommandConfig
 from metric_config import ProfilerConfig, SegmentConfig, Segments
-from record_parser import parse_bpftrace_output, parse_rocm_smi_output
+from record_parser import parse_bpftrace_output, parse_rocm_smi_output, parse_tsa_output
 from record_types import Record, RecordList
 from workload_context import WorkloadContext
 
@@ -28,7 +28,8 @@ def get_monitors() -> dict[Segments, MonitorSpecification]:
         Segments.THREAD:  MonitorSpecification(target = monitor_process_threads, req_cfg = True,  req_pid = True,  req_interval = True),
         Segments.MEMORY:  MonitorSpecification(target = monitor_process_memory,  req_cfg = True,  req_pid = True,  req_interval = True),
         Segments.GPU:     MonitorSpecification(target = monitor_amd_gpu,         req_cfg = True,  req_pid = False, req_interval = True),
-        Segments.STARTUP: MonitorSpecification(target = monitor_process_startup, req_cfg = False, req_pid = True,  req_interval = False)
+        Segments.STARTUP: MonitorSpecification(target = monitor_process_startup, req_cfg = False, req_pid = True,  req_interval = False),
+        Segments.TSA:     MonitorSpecification(target = monitor_process_tsa,     req_cfg = False, req_pid = True,  req_interval = False)
     }
 
 def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig, cmd_cfg: CommandConfig) -> None:
@@ -72,6 +73,9 @@ def start_monitoring(ctx: WorkloadContext, cfg: ProfilerConfig, cmd_cfg: Command
 
         if segment == Segments.STARTUP:
             args.append(cmd_cfg.bpftrace_startup)
+
+        if segment == Segments.TSA:
+            args.append(cmd_cfg.bpftrace_tsa)
 
         # required process id
         if monitor.req_pid:
@@ -134,13 +138,61 @@ def monitor_process_startup(
                 )
 
                 stdout, _ = proc.communicate()
-                
+
                 record = parse_bpftrace_output(stdout.strip())
                 if record:
                     startup_records.append(record)
 
         except Exception as e:
             print(f"Monitor startup error: {e}", file = sys.stderr)
+        
+        while activity_event.is_set() and not shutdown_event.is_set():
+            time.sleep(0.01)
+
+    return
+
+
+
+def monitor_process_tsa(
+    activity_event:  threading.Event,
+    shutdown_event:  threading.Event,
+    tsa_records:     RecordList,
+    cmd:             BPFTraceTSACommandConfig,
+    active_pid_ref:  list[int]
+) -> None:
+    """
+    Monitors startup cleanly across an infinite number of iterations
+    without busy-spinning or state-locking.
+    """
+    while not shutdown_event.is_set():
+        activity_event.wait()
+
+        if shutdown_event.is_set():
+            break
+        try:
+            active_pid = active_pid_ref[0]
+            if active_pid > 0:
+                command = cmd.base_command + [cmd.pid_flag, str(active_pid), cmd.script]
+
+                proc = subprocess.Popen(
+                    command,
+                    stdout = subprocess.PIPE,
+                    stderr = subprocess.PIPE,
+                    text   = True
+                )
+
+                stdout, _ = proc.communicate()
+                #debug print to be removed
+                print(stdout, file=sys.stderr)
+                
+                record = parse_tsa_output(stdout.strip())
+                if record:
+                     tsa_records.append(record)
+                     #debug print to be removed
+                     print(record, file=sys.stderr)
+
+        except Exception as e:
+            print(f"Monitor tsa error: {e}", file = sys.stderr)
         
         while activity_event.is_set() and not shutdown_event.is_set():
             time.sleep(0.01)

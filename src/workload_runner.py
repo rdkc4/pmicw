@@ -84,7 +84,7 @@ def run_workload(ctx: WorkloadContext, cfg: ProfilerConfig, cmd_cfg: CommandConf
 
     start_monitoring(ctx, cfg, cmd_cfg)
     try:
-        wrapper  = cmd_cfg.bash_wrapper.base_command if ctx.selected_metrics.startup else []
+        wrapper  = cmd_cfg.bash_wrapper.base_command if (ctx.selected_metrics.startup or ctx.selected_metrics.tsa) else []
         wrapper += ctx.command
 
         # preventing cold runs to affect statistics (optional)
@@ -162,7 +162,7 @@ def execute_workload(
         ctx.monitors.active_pid[0] = target_pid
         ctx.monitors.activity_event.set()
 
-        if ctx.selected_metrics.startup:
+        if ctx.selected_metrics.startup or ctx.selected_metrics.tsa:
             # giving some time for bpfscript to compile
             time.sleep(2)
             start = time.perf_counter()
@@ -192,7 +192,7 @@ def execute_workload(
             ctx.records[Segments.PERF].append(perf_record)
         
         # prevents missing .clear() signal for monitors
-        time.sleep(0.1)
+        time.sleep(1)
 
 def setup_workload_context(args: argparse.Namespace):
     """
@@ -208,7 +208,8 @@ def setup_workload_context(args: argparse.Namespace):
         gpu       = Segments.GPU     in args.metric,
         memory    = Segments.MEMORY  in args.metric,
         thread    = Segments.THREAD  in args.metric,
-        startup   = Segments.STARTUP in args.metric
+        startup   = Segments.STARTUP in args.metric,
+        tsa       = Segments.TSA     in args.metric
     )
 
     monitors = WorkloadMonitors(

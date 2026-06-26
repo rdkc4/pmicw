@@ -26,11 +26,18 @@ class BPFTraceStartupCommandConfig:
     script:       str       = "scripts/linker_prof.bt"
 
 @dataclass
+class BPFTraceTSACommandConfig:
+    base_command: list[str] = field(default_factory = lambda: ["sudo", "bpftrace", "-q"])
+    pid_flag:     str       = "-p"
+    script:       str       = "scripts/thread_prof.bt"
+
+@dataclass
 class CommandConfig:
     rocm_smi:         RocmSMICommandConfig         = field(default_factory = RocmSMICommandConfig)
     perf:             PerfCommandConfig            = field(default_factory = PerfCommandConfig)
     bash_wrapper:     BashCommandWrapperConfig     = field(default_factory = BashCommandWrapperConfig)
     bpftrace_startup: BPFTraceStartupCommandConfig = field(default_factory = BPFTraceStartupCommandConfig)
+    bpftrace_tsa:     BPFTraceTSACommandConfig     = field(default_factory = BPFTraceTSACommandConfig)
 
 def load_command_config(config_path: Path | str):
     if not os.path.exists(config_path):

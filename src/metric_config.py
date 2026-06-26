@@ -42,6 +42,7 @@ class Segments(StrEnum):
     THREAD    = "thread"
     PERF      = "perf"
     STARTUP   = "startup"
+    TSA       = "tsa"
 
 @dataclass
 class BaseMetric:

@@ -5,6 +5,7 @@ from typing import TypeAlias
 
 PerfRecord:     TypeAlias = Record
 BpftraceRecord: TypeAlias = Record
+TSARecord:      TypeAlias = Record
 ROCMSMIRecord:  TypeAlias = dict
 
 def parse_perf_output(perf_output: str) -> PerfRecord:
@@ -53,6 +54,40 @@ def parse_bpftrace_output(bpftrace_output: str) -> BpftraceRecord:
         raw = dict(json.loads(bpftrace_output))
         for metric_name, metric_value in raw.items():
             record[metric_name] = metric_value
+
+    except json.JSONDecodeError:
+        pass
+
+    return record
+
+def parse_tsa_output(tsa_output: str) -> TSARecord:
+    record = {}
+    try:
+        raw = dict(json.loads(tsa_output))
+
+        total_start = total_end = 0
+        for entry in raw.get("thread_lifetimes", []):
+            total_start += entry.get("start")
+            total_end += entry.get("end")
+
+        total_runtime = total_end - total_start
+
+        totals = [0,0,0,0,0,0]
+        
+        for entry in raw.get("thread_tsa", []):
+            state = entry.get("state")
+            totals[state] += entry.get("duration_ns",0)
+
+    
+        record = {
+            "runtime_ns": total_runtime,
+            "runnable_ns": totals[0],
+            "swapping_ns": totals[1],
+            "sleeping_ns": totals[2], 
+            "lock_ns": totals[3], 
+            "idle_ns": totals[4],
+            "executing_ns": totals[5]
+        }
 
     except json.JSONDecodeError:
         pass
