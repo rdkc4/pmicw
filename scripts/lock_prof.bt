@@ -1,0 +1,133 @@
+#!/usr/bin/env bpftrace
+
+macro JSON_PREFIX($first) {
+    if ($first == 0) {
+        printf(", ");
+    }
+}
+
+macro JSON_TID_VAL($kv, $first) {
+    JSON_PREFIX($first);
+    printf("{\"tid\": %ld, \"value\": %ld}", $kv.0, (int64)$kv.1);
+}
+
+macro JSON_TID_ADDR_VAL($kv, $first){
+    JSON_PREFIX($first);
+    printf("{\"tid\": %ld, \"addr\": \"%p\", \"value\": %ld}", $kv.0.0, $kv.0.1, (int64)$kv.1);
+}
+
+tracepoint:syscalls:sys_enter_futex
+{
+    @futex_uaddr[tid]    = args->uaddr;
+    @futex_start_ns[tid] = nsecs;
+    @tracked[tid]        = 1;
+}
+
+tracepoint:syscalls:sys_exit_futex
+/@futex_start_ns[tid]/
+{
+    $address  = @futex_uaddr[tid];
+    $duration = (int64)nsecs - (int64)@futex_start_ns[tid];
+
+    @futex_latency_ns[tid, $address] = avg($duration);
+    @futex_call_count[tid, $address] = count();
+
+    $_ = delete(@futex_start_ns[tid]);
+    $_ = delete(@futex_uaddr[tid]);
+}
+
+tracepoint:sched:sched_wakeup,
+tracepoint:sched:sched_wakeup_new
+/@tracked[args->pid]/
+{
+    @sched_wakeup_count[args->pid] = count();
+    @sched_wakeup_ts_ns[args->pid] = nsecs;
+}
+
+tracepoint:sched:sched_switch
+/@sched_wakeup_ts_ns[args->next_pid]/
+{
+    $duration = (int64)nsecs - (int64)@sched_wakeup_ts_ns[args->next_pid];
+    
+    @sched_latency_ns[args->next_pid] = avg($duration);
+
+    $_ = delete(@sched_wakeup_ts_ns[args->next_pid]);
+}
+
+kprobe:native_queued_spin_lock_slowpath
+{
+    @spin_start[tid] = nsecs;
+}
+
+kretprobe:native_queued_spin_lock_slowpath
+/@spin_start[tid]/
+{
+    $latency = (int64)nsecs - (int64)@spin_start[tid];
+
+    @spinlock_avg_latency_ns[tid] = avg($latency);
+    @spinlock_total_count[tid]    = count();
+
+    $_ = delete(@spin_start[tid]);
+}
+
+END
+{
+    $first = 1;
+    printf("{\"futex_latency_ns\": [");
+    for ($kv : @futex_latency_ns) {
+        JSON_TID_ADDR_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"futex_call_count\": [");
+    for ($kv : @futex_call_count) {
+        JSON_TID_ADDR_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"sched_wakeup_count\": [");
+    for ($kv : @sched_wakeup_count) {
+        JSON_TID_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"sched_latency_ns\": [");
+    for ($kv : @sched_latency_ns) {
+        JSON_TID_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"spinlock_avg_latency_ns\": [");
+    for ($kv : @spinlock_avg_latency_ns) {
+        JSON_TID_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"spinlock_total_count\": [");
+    for ($kv : @spinlock_total_count) {
+        JSON_TID_VAL($kv, $first);
+        $first = 0;
+    }
+    printf("]}");
+
+
+    clear(@tracked);
+
+    clear(@futex_latency_ns);
+    clear(@futex_call_count);
+    clear(@futex_uaddr);
+    clear(@futex_start_ns);
+
+    clear(@sched_wakeup_count);
+    clear(@sched_wakeup_ts_ns);
+    clear(@sched_latency_ns);
+
+    clear(@spin_start);
+    clear(@spinlock_avg_latency_ns);
+    clear(@spinlock_total_count);
+}
