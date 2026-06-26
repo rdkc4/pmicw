@@ -190,6 +190,9 @@ def execute_workload(
         if ctx.selected_metrics.cpu:
             perf_record = parse_perf_output(stderr)
             ctx.records[Segments.PERF].append(perf_record)
+        
+        # prevents missing .clear() signal for monitors
+        time.sleep(0.1)
 
 def setup_workload_context(args: argparse.Namespace):
     """
