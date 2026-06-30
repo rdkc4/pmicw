@@ -1,0 +1,171 @@
+#!/usr/bin/env bpftrace
+
+macro JSON_PREFIX($first) {
+    if ($first == 0) {
+        printf(", ");
+    }
+}
+
+macro JSON_TID_VAL($kv, $first) {
+    JSON_PREFIX($first);
+    printf("{\"tid\": %ld, \"value\": %ld}", $kv.0, (int64)$kv.1);
+}
+
+macro JSON_SYM_IP_VAL($kv, $first) {
+    JSON_PREFIX($first);
+    printf("{\"ip_sym\": \"%s\", \"ip\": \"%p\", \"value\": %ld}", usym($kv.0), $kv.0, (int64)$kv.1);
+}
+
+macro JSON_ADDR_VAL($kv, $first) {
+    JSON_PREFIX($first);
+    printf("{\"addr\": \"%p\", \"value\": %ld}", $kv.0, (int64)$kv.1);
+}
+
+/**
+ * Tracks user-space page faults.
+ *
+ * Records:
+ *  - page fault frequency per thread
+ *  - instruction pointers responsible for faults
+ *  - accessed virtual addresses
+ */
+tracepoint:exceptions:page_fault_user
+{
+    @page_faults[tid]          = count();
+    @fault_ip[args->ip]        = count();
+    @fault_addr[args->address] = count();
+}
+
+/**
+ * Tracks mmap() allocations.
+ *
+ * Records:
+ *  - number of mmap calls
+ *  - total bytes mapped
+ *  - largest mapping
+ */
+tracepoint:syscalls:sys_enter_mmap
+{
+    @mmap_calls[tid] = count();
+    @mmap_bytes[tid] = sum(args->len);
+
+    if (args->len > @largest_mmap[tid]) {
+        @largest_mmap[tid] = args->len;
+    }
+}
+
+/**
+ * Tracks heap expansion requests.
+ */
+tracepoint:syscalls:sys_enter_brk
+{
+    @brk_calls[tid] = count();
+}
+
+/**
+ * Marks beginning of direct reclaim.
+ */
+tracepoint:vmscan:mm_vmscan_direct_reclaim_begin
+{
+    @reclaim_start[tid] = nsecs;
+}
+
+/**
+ * Measures direct reclaim duration.
+ */
+tracepoint:vmscan:mm_vmscan_direct_reclaim_end
+/@reclaim_start[tid]/
+{
+    $duration = (int64)nsecs - (int64)@reclaim_start[tid];
+
+    @reclaim_avg_ns[tid] = avg($duration);
+    @reclaim_count[tid]  = count();
+
+    $_ = delete(@reclaim_start[tid]);
+}
+
+tracepoint:sched:sched_process_exit
+/curtask->tgid == args->pid/
+{
+    $first = 1;
+    printf("{\"page_faults\": [");
+    for ($kv : @page_faults) {
+        JSON_TID_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"faulting_ips\": [");
+    for ($kv : @fault_ip) {
+        JSON_SYM_IP_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"faulting_addr\": [");
+    for ($kv : @fault_addr) {
+        JSON_ADDR_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"mmap_calls\": [");
+    for ($kv : @mmap_calls) {
+        JSON_TID_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"mapped_bytes\": [");
+    for ($kv : @mmap_bytes) {
+        JSON_TID_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"largest_mapping\": [");
+    for ($kv : @largest_mmap) {
+        JSON_TID_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"brk_calls\": [");
+    for ($kv : @brk_calls) {
+        JSON_TID_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"reclaim_count\": [");
+    for ($kv : @reclaim_count) {
+        JSON_TID_VAL($kv, $first);
+        $first = 0;
+    }
+
+    $first = 1;
+    printf("], \"reclaim_avg_ns\": [");
+    for ($kv : @reclaim_avg_ns) {
+        JSON_TID_VAL($kv, $first);
+        $first = 0;
+    }
+
+    printf("]}");
+}
+
+END
+{
+    clear(@page_faults);
+    clear(@fault_ip);
+    clear(@fault_addr);
+
+    clear(@mmap_calls);
+    clear(@mmap_bytes);
+    clear(@largest_mmap);
+
+    clear(@brk_calls);
+
+    clear(@reclaim_start);
+    clear(@reclaim_count);
+    clear(@reclaim_avg_ns);
+}
