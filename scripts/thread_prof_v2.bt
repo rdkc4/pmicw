@@ -1,0 +1,250 @@
+#!/usr/bin/env bpftrace
+
+#define STATE_RUNNABLE       0
+#define STATE_SWAPPING       1
+#define STATE_SLEEPING       2
+#define STATE_LOCK           3
+#define STATE_IDLE           4
+#define STATE_EXECUTING      5
+
+#define TASK_RUNNING         0
+#define TASK_INTERRUPTIBLE   1
+#define TASK_UNINTERRUPTIBLE 2
+
+#define F_PID                0
+#define F_TID                1
+#define F_TS                 2
+#define F_DUR                3
+#define F_STATE              4
+
+config = {
+    max_map_keys = 2000000
+}
+
+BEGIN
+{
+    @start_ns = nsecs;
+
+    @tracked[tid] = 1;
+    @pids[tid]    = (int64)pid;
+    @oncpu[tid]   = (int64)@start_ns;
+}
+
+tracepoint:sched:sched_process_fork
+{
+    $parent = (int64)args.parent_pid;
+    $child  = (int64)args.child_pid;
+
+    if (@tracked[$parent]) {
+        @tracked[$child] = 1;
+        @pids[$child]    = @pids[$parent];
+    }
+    else if($parent == curtask->group_leader->tgid) {
+        @tracked[$parent] = 1;
+        @pids[$parent]    = $parent;
+        @tracked[$child]  = 1;
+        @pids[$child]     = @pids[$parent];
+    }
+}
+
+tracepoint:exceptions:page_fault_user
+/ @tracked[tid] /
+{
+    @paging[tid] = 1;
+}
+
+tracepoint:syscalls:sys_enter_futex
+/ @tracked[tid] /
+{
+    @locking[tid] = 1;
+}
+
+tracepoint:syscalls:sys_exit_futex
+/ @tracked[tid] /
+{
+    $_ = delete(@locking[tid]);
+}
+
+tracepoint:syscalls:sys_enter_epoll_wait,
+tracepoint:syscalls:sys_enter_poll
+/ @tracked[tid] /
+{
+    @idle[tid] = 1;
+}
+
+tracepoint:syscalls:sys_exit_epoll_wait,
+tracepoint:syscalls:sys_exit_poll
+/ @tracked[tid] /
+{
+    $_ = delete(@idle[tid]);
+}
+
+tracepoint:sched:sched_switch
+{
+    $now  = nsecs;
+    $prev = (int64)args.prev_pid;
+    $next = (int64)args.next_pid;
+
+    if (@tracked[$prev]) {
+        if (@pids[$prev] == 0) {
+            @pids[$prev] = (int64)pid;
+        }
+        @meta_name[$prev] = str(comm);
+        @meta_pid[$prev]  = (int64)@pids[$prev];
+    }
+
+    if (@tracked[$prev] && @oncpu[$prev]) {
+        $rel_ns  = (int64)@oncpu[$prev] - (int64)@start_ns;
+        $ev_key  = ((int64)$prev << 40) | ($rel_ns & 0xFFFFFFFFFF);
+
+        @ev[$ev_key, F_PID]   = (int64)@pids[$prev];
+        @ev[$ev_key, F_TID]   = (int64)$prev;
+        @ev[$ev_key, F_TS]    = $rel_ns;
+        @ev[$ev_key, F_DUR]   = (int64)$now - (int64)@oncpu[$prev];
+        @ev[$ev_key, F_STATE] = (int64)STATE_EXECUTING;
+
+        $_ = delete(@oncpu[$prev]);
+
+        $state = STATE_SLEEPING;
+
+        if (args.prev_state == TASK_RUNNING) {
+            if (@paging[$prev]) {
+                $state = STATE_SWAPPING;
+                $_ = delete(@paging[$prev]);
+            } 
+            else {
+                $state = STATE_RUNNABLE;
+            }
+
+        } 
+        else {
+            if (@locking[$prev]) {
+                $state = STATE_LOCK;
+            } 
+            else if (@idle[$prev]) {
+                $state = STATE_IDLE;
+            } 
+            else {
+                $state = STATE_SLEEPING;
+            }
+        }
+
+        @offcpu[$prev]   = (int64)$now;
+        @offstate[$prev] = (int64)$state;
+    }
+
+    if (@tracked[$next] && @offcpu[$next]) {
+        $dur = (int64)$now - (int64)@offcpu[$next];
+
+        if ($dur > 0) {
+            $rel_off = (int64)@offcpu[$next] - (int64)@start_ns;
+            $off_key = ((int64)$next << 40) | ($rel_off & 0xFFFFFFFFFF);
+
+            @ev[$off_key, F_PID]   = (int64)@pids[$next];
+            @ev[$off_key, F_TID]   = (int64)$next;
+            @ev[$off_key, F_TS]    = $rel_off;
+            @ev[$off_key, F_DUR]   = (int64)$dur;
+            @ev[$off_key, F_STATE] = (int64)@offstate[$next];
+        }
+
+        $_ = delete(@offcpu[$next]);
+        $_ = delete(@offstate[$next]);
+    }
+
+    if (@tracked[$next] && @oncpu[$next] == 0) {
+        @oncpu[$next] = (int64)$now;
+    }
+}
+
+tracepoint:sched:sched_process_exit
+/ @tracked[tid] /
+{
+    $now = nsecs;
+
+    if (@oncpu[tid]) {
+        $rel_ns  = (int64)@oncpu[tid] - (int64)@start_ns;
+        $ev_key  = ((int64)tid << 40) | ($rel_ns & 0xFFFFFFFFFF);
+
+        @ev[$ev_key, F_PID]   = (int64)@pids[tid];
+        @ev[$ev_key, F_TID]   = (int64)tid;
+        @ev[$ev_key, F_TS]    = $rel_ns;
+        @ev[$ev_key, F_DUR]   = (int64)$now - (int64)@oncpu[tid];
+        @ev[$ev_key, F_STATE] = (int64)STATE_EXECUTING;
+    }
+
+    $_ = delete(@tracked[tid]);
+    $_ = delete(@pids[tid]);
+    $_ = delete(@oncpu[tid]);
+    $_ = delete(@offcpu[tid]);
+    $_ = delete(@offstate[tid]);
+    $_ = delete(@paging[tid]);
+    $_ = delete(@locking[tid]);
+    $_ = delete(@idle[tid]);
+}
+
+END
+{
+    printf("[");
+
+    $first = 1;
+
+    for ($kv_meta : @meta_name) {
+        if (!$first) { printf(","); }
+        $first = 0;
+
+        $t    = (int64)$kv_meta.0;
+        $name = str($kv_meta.1);
+        $p    = (int64)@meta_pid[$t];
+
+        printf("{\"ph\":\"M\",\"name\":\"thread_name\",\"pid\":%llu,\"tid\":%llu,\"args\":{\"name\":\"%s\"}}",
+            $p, $t, $name);
+
+        if ($p == $t) {
+            printf(",{\"ph\":\"M\",\"name\":\"process_name\",\"pid\":%llu,\"tid\":%llu,\"args\":{\"name\":\"%s\"}}",
+                $p, $t, $name);
+        }
+    }
+
+    for ($kv : @ev) {
+        if ($kv.0.1 != F_PID) {
+            continue;
+        }
+
+        $ev_key = $kv.0.0;
+        $state  = @ev[$ev_key, F_STATE];
+        $name   = "UNKNOWN";
+
+        if      ($state == STATE_RUNNABLE)  { $name = "RUNNABLE";  }
+        else if ($state == STATE_SWAPPING)  { $name = "SWAPPING";  }
+        else if ($state == STATE_SLEEPING)  { $name = "SLEEPING";  }
+        else if ($state == STATE_LOCK)      { $name = "LOCK";      }
+        else if ($state == STATE_IDLE)      { $name = "IDLE";      }
+        else if ($state == STATE_EXECUTING) { $name = "EXECUTING"; }
+
+        if (!$first) { printf(","); }
+        $first = 0;
+
+        printf("{\"ph\":\"X\",\"cat\":\"state\",\"name\":\"%s\",\"pid\":%llu,\"tid\":%llu,\"ts\":%llu,\"dur\":%llu}",
+            $name,
+            @ev[$ev_key, F_PID],
+            @ev[$ev_key, F_TID],
+            (uint64)@ev[$ev_key, F_TS]  / 1000,
+            (uint64)@ev[$ev_key, F_DUR] / 1000
+        );
+    }
+
+    printf("]");
+
+    clear(@ev);
+    clear(@tracked);
+    clear(@pids);
+    clear(@oncpu);
+    clear(@offcpu);
+    clear(@offstate);
+    clear(@paging);
+    clear(@locking);
+    clear(@idle);
+    clear(@start_ns);
+    clear(@meta_name);
+    clear(@meta_pid);
+}
